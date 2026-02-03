@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'PRECIFICA PRO - Calculadora de Preços para Marketplaces',
-  description: 'Calculadora profissional de preço de venda para Shopee e Mercado Livre',
+  title: 'PrecificaPRO — Calculadora profissional para marketplaces',
+  description: 'Precificação inteligente usando taxas reais do Mercado Livre e Shopee.',
 }
 
 export default function RootLayout({
