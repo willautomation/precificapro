@@ -66,7 +66,7 @@ export default function Home() {
             {!result && (
               <div className="card text-center py-12">
                 <p className="text-gray-500 text-lg">
-                  Preencha o formulário e clique em "Calcular" para ver os resultados
+                  Preencha o formulário e clique em &quot;Calcular&quot; para ver os resultados
                 </p>
               </div>
             )}
