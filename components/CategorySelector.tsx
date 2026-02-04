@@ -26,7 +26,9 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Carregar categorias: primário no browser (endpoint público ML) e fallback em /api/ml/categories
+  const [needsConnect, setNeedsConnect] = useState(false)
+
+  // Carregar categorias sempre de /api/ml/categories (autenticado)
   useEffect(() => {
     const loadCategories = async () => {
       const cached = localStorage.getItem(CACHE_KEY)
@@ -38,6 +40,7 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
             setCategories(cache.data)
             setFilteredCategories(cache.data)
             setError(null)
+            setNeedsConnect(false)
             return
           }
         } catch {
@@ -47,49 +50,56 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
 
       setLoading(true)
       setError(null)
+      setNeedsConnect(false)
 
       let data: Category[] | null = null
+      let status = 0
 
-      // Primário: fetch direto no browser (endpoint público, sem token)
       try {
-        const directRes = await fetch(
-          'https://api.mercadolibre.com/sites/MLB/categories',
-          { headers: { Accept: 'application/json' } }
-        )
-        if (directRes.ok) {
-          data = await directRes.json()
-        }
-      } catch {
-        // CORS ou rede: tentar fallback
-      }
+        const res = await fetch('/api/ml/categories', { credentials: 'include' })
+        status = res.status
 
-      // Fallback: proxy do backend (pode falhar com 403 PolicyAgent no servidor)
-      if (!data?.length) {
-        try {
-          const proxyRes = await fetch('/api/ml/categories')
-          if (proxyRes.ok) {
-            data = await proxyRes.json()
+        if (res.ok) {
+          data = await res.json()
+        } else if (res.status === 401) {
+          const body = await res.json().catch(() => ({}))
+          if (
+            body?.error?.includes('Token não encontrado') ||
+            body?.error?.includes('Conecte')
+          ) {
+            setNeedsConnect(true)
+          } else {
+            setError('Não foi possível carregar as categorias. Usando valores padrão.')
+            console.error('Erro ao carregar categorias:', status, body)
           }
-        } catch {
-          // proxy falhou
+        } else {
+          setError('Não foi possível carregar as categorias. Usando valores padrão.')
+          console.error('Erro ao carregar categorias:', status, await res.text())
         }
+      } catch (err) {
+        setError('Não foi possível carregar as categorias. Usando valores padrão.')
+        console.error('Erro ao carregar categorias:', err)
       }
 
-      if (data?.length) {
+      if (Array.isArray(data)) {
         setCategories(data)
         setFilteredCategories(data)
         setError(null)
-        const cache = { data, timestamp: Date.now() }
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
-      } else {
+        setNeedsConnect(false)
+        if (data.length > 0) {
+          const cache = { data, timestamp: Date.now() }
+          localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
+        }
+      } else if (!needsConnect) {
         setError('Não foi possível carregar as categorias. Usando valores padrão.')
-        console.error('Erro ao carregar categorias: direto e fallback falharam')
+        if (status) console.error('Erro ao carregar categorias:', status)
       }
 
       setLoading(false)
     }
 
     loadCategories()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, [])
 
   // Filtrar categorias conforme pesquisa
@@ -224,7 +234,21 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
         <p className="text-sm text-gray-500">Buscando taxas da categoria...</p>
       )}
 
-      {error && (
+      {needsConnect && (
+        <div className="space-y-2">
+          <p className="text-sm text-amber-600">
+            Conecte o Mercado Livre para carregar as categorias.
+          </p>
+          <a
+            href="/api/ml/auth"
+            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Conectar Mercado Livre
+          </a>
+        </div>
+      )}
+
+      {error && !needsConnect && (
         <p className="text-sm text-amber-600">{error}</p>
       )}
 
