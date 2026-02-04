@@ -1,179 +1,90 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-
-interface Category {
-  id: string
-  name: string
-}
+import React, { useState, useRef } from 'react'
 
 interface CategorySelectorProps {
-  priceForFees?: number
-  onCategorySelect: (classicoPercent: number | null, premiumPercent: number | null) => void
+  onCategoryResolved: (
+    categoryId: string | null,
+    categoryName: string | null,
+    classicoSaleFee: number | null,
+    classicoFixedFee: number | null,
+    premiumSaleFee: number | null,
+    premiumFixedFee: number | null
+  ) => void
 }
 
-const CACHE_KEY = 'ml_categories_cache'
-const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000 // 7 dias
-
-export function CategorySelector({ priceForFees = 100, onCategorySelect }: CategorySelectorProps) {
-  const [categories, setCategories] = useState<Category[]>([])
-  const [filteredCategories, setFilteredCategories] = useState<Category[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
+export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) {
+  const [searchText, setSearchText] = useState('')
+  const [resolvedCategory, setResolvedCategory] = useState<{ id: string; name: string } | null>(null)
   const [loading, setLoading] = useState(false)
-  const [loadingFees, setLoadingFees] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showDropdown, setShowDropdown] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [needsConnect, setNeedsConnect] = useState(false)
-
-  // Carregar categorias sempre de /api/ml/categories (autenticado)
-  useEffect(() => {
-    const loadCategories = async () => {
-      const cached = localStorage.getItem(CACHE_KEY)
-      if (cached) {
-        try {
-          const cache = JSON.parse(cached)
-          const now = Date.now()
-          if (now - cache.timestamp < CACHE_DURATION && cache.data?.length) {
-            setCategories(cache.data)
-            setFilteredCategories(cache.data)
-            setError(null)
-            setNeedsConnect(false)
-            return
-          }
-        } catch {
-          // cache inválido
-        }
-      }
-
-      setLoading(true)
-      setError(null)
-      setNeedsConnect(false)
-
-      let data: Category[] | null = null
-      let status = 0
-
-      try {
-        const res = await fetch('/api/ml/categories', { credentials: 'include' })
-        status = res.status
-
-        if (res.ok) {
-          data = await res.json()
-        } else if (res.status === 401) {
-          const body = await res.json().catch(() => ({}))
-          if (
-            body?.error?.includes('Token não encontrado') ||
-            body?.error?.includes('Conecte')
-          ) {
-            setNeedsConnect(true)
-          } else {
-            setError('Não foi possível carregar as categorias. Usando valores padrão.')
-            console.error('Erro ao carregar categorias:', status, body)
-          }
-        } else {
-          setError('Não foi possível carregar as categorias. Usando valores padrão.')
-          console.error('Erro ao carregar categorias:', status, await res.text())
-        }
-      } catch (err) {
-        setError('Não foi possível carregar as categorias. Usando valores padrão.')
-        console.error('Erro ao carregar categorias:', err)
-      }
-
-      if (Array.isArray(data)) {
-        setCategories(data)
-        setFilteredCategories(data)
-        setError(null)
-        setNeedsConnect(false)
-        if (data.length > 0) {
-          const cache = { data, timestamp: Date.now() }
-          localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
-        }
-      } else if (!needsConnect) {
-        setError('Não foi possível carregar as categorias. Usando valores padrão.')
-        if (status) console.error('Erro ao carregar categorias:', status)
-      }
-
-      setLoading(false)
-    }
-
-    loadCategories()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
-  }, [])
-
-  // Filtrar categorias conforme pesquisa
-  useEffect(() => {
-    if (!searchTerm.trim()) {
-      setFilteredCategories(categories)
+  const searchByText = async (text: string) => {
+    const q = text.trim()
+    if (!q) {
+      setResolvedCategory(null)
+      onCategoryResolved(null, null, null, null, null, null)
       return
     }
-
-    const term = searchTerm.toLowerCase()
-    const filtered = categories.filter(cat =>
-      cat.name.toLowerCase().includes(term)
-    )
-    setFilteredCategories(filtered)
-  }, [searchTerm, categories])
-
-  // Fechar dropdown ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node)
-      ) {
-        setShowDropdown(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const handleCategorySelect = async (category: Category) => {
-    setSelectedCategory(category)
-    setSearchTerm(category.name)
-    setShowDropdown(false)
-    setLoadingFees(true)
+    setLoading(true)
     setError(null)
-    setNeedsConnect(false)
-
     try {
-      const url = `/api/ml/fees?categoryId=${encodeURIComponent(category.id)}&price=${encodeURIComponent(priceForFees)}`
-      const response = await fetch(url, { credentials: 'include' })
-
-      if (response.status === 401) {
-        setNeedsConnect(true)
-        onCategorySelect(null, null)
+      const res = await fetch(
+        `https://api.mercadolibre.com/sites/MLB/domain_discovery/search?q=${encodeURIComponent(q)}`
+      )
+      if (!res.ok) throw new Error('Falha na busca')
+      const data = await res.json()
+      const first = Array.isArray(data) ? data[0] : null
+      if (!first?.category_id) {
+        setResolvedCategory(null)
+        onCategoryResolved(null, null, null, null, null, null)
         return
       }
-
-      if (!response.ok) {
-        throw new Error('Erro ao buscar taxas')
+      const cat = { id: first.category_id, name: first.category_name ?? first.category_id }
+      setResolvedCategory(cat)
+      const feeRes = await fetch(
+        `/api/ml/fees?category_id=${encodeURIComponent(cat.id)}`
+      )
+      if (feeRes.ok) {
+        const fees = await feeRes.json()
+        onCategoryResolved(
+          cat.id,
+          cat.name,
+          fees.classico ?? null,
+          fees.classico_fixed ?? null,
+          fees.premium ?? null,
+          fees.premium_fixed ?? null
+        )
+      } else {
+        onCategoryResolved(cat.id, cat.name, null, null, null, null)
       }
-
-      const fees = await response.json()
-
-      onCategorySelect(fees.classico, fees.premium)
-    } catch (err) {
-      setError('Não foi possível buscar as taxas desta categoria. Usando valores padrão.')
-      console.error('Erro ao buscar taxas:', err)
-      onCategorySelect(null, null)
+    } catch {
+      setError('Não foi possível identificar a categoria.')
+      setResolvedCategory(null)
+      onCategoryResolved(null, null, null, null, null, null)
     } finally {
-      setLoadingFees(false)
+      setLoading(false)
     }
   }
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value
+    setSearchText(v)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!v.trim()) {
+      setResolvedCategory(null)
+      onCategoryResolved(null, null, null, null, null, null)
+      return
+    }
+    debounceRef.current = setTimeout(() => searchByText(v), 400)
+  }
+
   const handleClear = () => {
-    setSelectedCategory(null)
-    setSearchTerm('')
+    setSearchText('')
+    setResolvedCategory(null)
     setError(null)
-    // Voltar aos valores padrão
-    onCategorySelect(null, null)
+    onCategoryResolved(null, null, null, null, null, null)
   }
 
   return (
@@ -181,88 +92,30 @@ export function CategorySelector({ priceForFees = 100, onCategorySelect }: Categ
       <label className="block text-sm font-medium text-gray-700 mb-2">
         Categoria do Produto (Mercado Livre)
       </label>
-      
       <div className="relative">
         <input
-          ref={inputRef}
           type="text"
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value)
-            setShowDropdown(true)
-            if (!e.target.value) {
-              setSelectedCategory(null)
-            }
-          }}
-          onFocus={() => setShowDropdown(true)}
-          placeholder="Pesquisar categoria..."
+          value={searchText}
+          onChange={handleChange}
+          placeholder="Ex: celular samsung"
           className="input-field"
           disabled={loading}
         />
-        
-        {selectedCategory && (
+        {resolvedCategory && (
           <button
             type="button"
             onClick={handleClear}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 text-sm font-medium"
           >
-            Limpar categoria
+            Limpar
           </button>
         )}
-
-        {showDropdown && filteredCategories.length > 0 && (
-          <div
-            ref={dropdownRef}
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-          >
-            {filteredCategories.slice(0, 20).map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => handleCategorySelect(category)}
-                className="w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors"
-              >
-                {category.name}
-              </button>
-            ))}
-            {filteredCategories.length > 20 && (
-              <div className="px-4 py-2 text-sm text-gray-500 text-center">
-                Mostrando 20 de {filteredCategories.length} resultados
-              </div>
-            )}
-          </div>
-        )}
       </div>
-
-      {loading && (
-        <p className="text-sm text-gray-500">Carregando categorias...</p>
-      )}
-
-      {loadingFees && selectedCategory && (
-        <p className="text-sm text-gray-500">Buscando taxas da categoria...</p>
-      )}
-
-      {needsConnect && (
-        <div className="space-y-2">
-          <p className="text-sm text-amber-600">
-            Conecte o Mercado Livre para carregar as categorias.
-          </p>
-          <a
-            href="/api/ml/auth"
-            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-          >
-            Conectar Mercado Livre
-          </a>
-        </div>
-      )}
-
-      {error && !needsConnect && (
-        <p className="text-sm text-amber-600">{error}</p>
-      )}
-
-      {selectedCategory && !loadingFees && !error && (
+      {loading && <p className="text-sm text-gray-500">Buscando categoria...</p>}
+      {error && <p className="text-sm text-amber-600">{error}</p>}
+      {resolvedCategory && !loading && (
         <p className="text-sm text-green-600">
-          ✓ Categoria selecionada: {selectedCategory.name}
+          ✓ {resolvedCategory.name}
         </p>
       )}
     </div>

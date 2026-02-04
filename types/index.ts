@@ -17,11 +17,11 @@ export interface CalculationInput {
   cpfHighVolume?: boolean
   // Mercado Livre specific
   mlPlan?: MLPlan
-  categoryClassicoPercent?: number | null
-  categoryPremiumPercent?: number | null
-  /** Peso em gramas, para estimativa de frete quando shippingTotal é 0 */
-  mlPesoG?: number
-  /** level_id ou power_seller_status da API, para aplicar desconto na estimativa de frete */
+  /** Taxa percentual de venda da categoria (API ML) */
+  mlSaleFeePercent?: number | null
+  /** Taxa fixa da categoria (API ML) */
+  mlFixedFee?: number | null
+  /** level_id ou power_seller_status da API, para reputação */
   mlReputationLevelId?: string | null
 }
 

@@ -27,65 +27,33 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
   
   // Mercado Livre specific
   const [mlPlan, setMlPlan] = useState<MLPlan>('classico')
-  const [classicoPercent, setClassicoPercent] = useState(12)
-  const [premiumPercent, setPremiumPercent] = useState(17)
-  const [categoryClassicoPercent, setCategoryClassicoPercent] = useState<number | null>(null)
-  const [categoryPremiumPercent, setCategoryPremiumPercent] = useState<number | null>(null)
-  // ML extras (não alteram cálculo ainda)
-  const [mlPesoG, setMlPesoG] = useState('')
-  const [mlDimC, setMlDimC] = useState('')
-  const [mlDimL, setMlDimL] = useState('')
-  const [mlDimA, setMlDimA] = useState('')
-  const [mlCep, setMlCep] = useState('01001-000')
+  const [mlClassicoSaleFee, setMlClassicoSaleFee] = useState<number | null>(null)
+  const [mlClassicoFixedFee, setMlClassicoFixedFee] = useState<number | null>(null)
+  const [mlPremiumSaleFee, setMlPremiumSaleFee] = useState<number | null>(null)
+  const [mlPremiumFixedFee, setMlPremiumFixedFee] = useState<number | null>(null)
 
-  // Carregar percentuais do config
   useEffect(() => {
-    const config = loadConfig()
-    setClassicoPercent(config.mercadoLivre.defaultCategoryPercentClassico)
-    setPremiumPercent(config.mercadoLivre.defaultCategoryPercentPremium)
-    // Resetar percentuais da categoria quando mudar de plataforma
     if (platform !== 'MercadoLivre') {
-      setCategoryClassicoPercent(null)
-      setCategoryPremiumPercent(null)
+      setMlClassicoSaleFee(null)
+      setMlClassicoFixedFee(null)
+      setMlPremiumSaleFee(null)
+      setMlPremiumFixedFee(null)
     }
   }, [platform])
 
-  // Listener para atualizar quando o config mudar
-  useEffect(() => {
-    const handleConfigUpdate = () => {
-      const config = loadConfig()
-      setClassicoPercent(config.mercadoLivre.defaultCategoryPercentClassico)
-      setPremiumPercent(config.mercadoLivre.defaultCategoryPercentPremium)
-      // Se não houver categoria selecionada, usar os padrões
-      if (categoryClassicoPercent === null && categoryPremiumPercent === null) {
-        // Os valores já foram atualizados acima
-      }
-    }
-
-    // Escutar evento customizado disparado quando o config é salvo
-    window.addEventListener('configUpdated', handleConfigUpdate)
-    // Também escutar mudanças no localStorage (para outras abas)
-    window.addEventListener('storage', handleConfigUpdate)
-
-    return () => {
-      window.removeEventListener('configUpdated', handleConfigUpdate)
-      window.removeEventListener('storage', handleConfigUpdate)
-    }
-  }, [categoryClassicoPercent, categoryPremiumPercent])
-
-  // Handler para quando uma categoria é selecionada
-  const handleCategorySelect = (classico: number | null, premium: number | null) => {
-    setCategoryClassicoPercent(classico)
-    setCategoryPremiumPercent(premium)
+  const handleCategoryResolved = (
+    _categoryId: string | null,
+    _categoryName: string | null,
+    classicoSaleFee: number | null,
+    classicoFixedFee: number | null,
+    premiumSaleFee: number | null,
+    premiumFixedFee: number | null
+  ) => {
+    setMlClassicoSaleFee(classicoSaleFee)
+    setMlClassicoFixedFee(classicoFixedFee)
+    setMlPremiumSaleFee(premiumSaleFee)
+    setMlPremiumFixedFee(premiumFixedFee)
   }
-
-  // Calcular percentuais efetivos (categoria ou padrão)
-  const effectiveClassicoPercent = categoryClassicoPercent !== null 
-    ? categoryClassicoPercent 
-    : classicoPercent
-  const effectivePremiumPercent = categoryPremiumPercent !== null 
-    ? categoryPremiumPercent 
-    : premiumPercent
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -127,10 +95,8 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
       }
     } else {
       input.mlPlan = mlPlan
-      input.categoryClassicoPercent = categoryClassicoPercent
-      input.categoryPremiumPercent = categoryPremiumPercent
-      const peso = parseFloat(mlPesoG) || 0
-      if (peso > 0) input.mlPesoG = peso
+      input.mlSaleFeePercent = mlPlan === 'premium' ? mlPremiumSaleFee : mlClassicoSaleFee
+      input.mlFixedFee = mlPlan === 'premium' ? mlPremiumFixedFee : mlClassicoFixedFee
       if (typeof window !== 'undefined') {
         input.mlReputationLevelId =
           localStorage.getItem('ml_reputation') ?? undefined
@@ -259,79 +225,7 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
         <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
           <MLConnectBlock />
 
-          <CategorySelector
-            priceForFees={parseFloat(productCost) || 100}
-            onCategorySelect={handleCategorySelect}
-          />
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Peso do produto (g)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={mlPesoG}
-              onChange={(e) => setMlPesoG(e.target.value)}
-              className="input-field"
-              placeholder="Ex: 500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Dimensões (opcional) — C x L x A (cm)
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={mlDimC}
-                onChange={(e) => setMlDimC(e.target.value)}
-                className="input-field"
-                placeholder="C"
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={mlDimL}
-                onChange={(e) => setMlDimL(e.target.value)}
-                className="input-field"
-                placeholder="L"
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={mlDimA}
-                onChange={(e) => setMlDimA(e.target.value)}
-                className="input-field"
-                placeholder="A"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              CEP de simulação
-            </label>
-            <input
-              type="text"
-              value={mlCep}
-              onChange={(e) => setMlCep(e.target.value)}
-              className="input-field"
-              placeholder="01001-000"
-            />
-          </div>
-
-          {(!mlPesoG.trim() || !mlCep.trim()) && (
-            <p className="text-sm text-amber-600">
-              ⚠ Peso e CEP são importantes para futura simulação de frete. O cálculo atual não é bloqueado.
-            </p>
-          )}
+          <CategorySelector onCategoryResolved={handleCategoryResolved} />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -339,8 +233,8 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
             </label>
             <RadioButtonGroup
               options={[
-                { value: 'classico', label: `Clássico ${effectiveClassicoPercent}%` },
-                { value: 'premium', label: `Premium ${effectivePremiumPercent}%` },
+                { value: 'classico', label: 'Clássico' },
+                { value: 'premium', label: 'Premium' },
               ]}
               value={mlPlan}
               onChange={(value) => setMlPlan(value as MLPlan)}
