@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
+export const dynamic = 'force-dynamic'
+
 interface TokenResponse {
   access_token: string
   token_type: string
@@ -8,6 +10,24 @@ interface TokenResponse {
   refresh_token: string
   scope: string
   user_id: number
+}
+
+function sanitizeTokenBody(raw: string): string {
+  if (!raw || raw.length > 500) return raw.slice(0, 500) + (raw.length > 500 ? '...' : '')
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>
+    const safe: Record<string, string> = {}
+    for (const [k, v] of Object.entries(o)) {
+      if (k.toLowerCase().includes('token') || k.toLowerCase().includes('secret')) {
+        safe[k] = '[REDACTED]'
+      } else {
+        safe[k] = String(v)
+      }
+    }
+    return JSON.stringify(safe)
+  } catch {
+    return raw.replace(/access_token|refresh_token|"[^"]*token[^"]*"/gi, '"***"')
+  }
 }
 
 export async function GET(request: Request) {
@@ -19,9 +39,15 @@ export async function GET(request: Request) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const isProduction = process.env.NODE_ENV === 'production'
 
-  // Verificar se houve erro no OAuth
+  console.log('[ML callback] recebido:', { hasCode: Boolean(code), hasState: Boolean(state), error: error ?? 'nenhum' })
+
   if (error) {
     return NextResponse.redirect(`${appUrl}/?ml_error=${encodeURIComponent(error)}`)
+  }
+
+  if (!code) {
+    console.log('[ML callback] ausência de code — redirecionando com ml_error=no_code')
+    return NextResponse.redirect(`${appUrl}/?ml_error=no_code`)
   }
 
   // Validar state (CSRF protection)
@@ -29,27 +55,26 @@ export async function GET(request: Request) {
   const savedState = cookieStore.get('ml_oauth_state')?.value
 
   if (!state || !savedState || state !== savedState) {
+    console.log('[ML callback] state inválido ou ausente')
     return NextResponse.redirect(`${appUrl}/?ml_error=invalid_state`)
-  }
-
-  if (!code) {
-    return NextResponse.redirect(`${appUrl}/?ml_error=no_code`)
   }
 
   const clientId = process.env.ML_CLIENT_ID
   const clientSecret = process.env.ML_CLIENT_SECRET
   const redirectUri = process.env.ML_REDIRECT_URI
+  console.log('[ML callback] redirect_uri usado na troca por token:', redirectUri ?? '(não definido)')
 
   if (!redirectUri) {
+    console.error('[ML callback] ML_REDIRECT_URI não definido')
     return NextResponse.redirect(`${appUrl}/?ml_error=config_error`)
   }
 
   if (!clientId || !clientSecret) {
+    console.error('[ML callback] ML_CLIENT_ID ou ML_CLIENT_SECRET ausente')
     return NextResponse.redirect(`${appUrl}/?ml_error=config_error`)
   }
 
   try {
-    // Trocar código por access_token
     const tokenResponse = await fetch('https://api.mercadolibre.com/oauth/token', {
       method: 'POST',
       headers: {
@@ -65,18 +90,20 @@ export async function GET(request: Request) {
       }),
     })
 
+    const status = tokenResponse.status
+    const errorText = await tokenResponse.text()
+
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text()
-      console.error('Erro ao trocar código por token:', {
-        status: tokenResponse.status,
+      console.error('[ML callback] POST /oauth/token falhou:', {
+        status,
         statusText: tokenResponse.statusText,
-        body: errorText,
+        bodySanitizado: sanitizeTokenBody(errorText),
       })
-      
       return NextResponse.redirect(`${appUrl}/?ml_error=token_exchange_failed`)
     }
 
     const tokenData: TokenResponse = await tokenResponse.json()
+    console.log('[ML callback] token obtido com sucesso (expires_in:', tokenData.expires_in, 's)')
 
     // Salvar tokens em cookies httpOnly
     const response = NextResponse.redirect(`${appUrl}/?ml_auth=success`)

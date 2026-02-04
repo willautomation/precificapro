@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const clientId = process.env.ML_CLIENT_ID
   const redirectUri = process.env.ML_REDIRECT_URI
@@ -18,10 +20,16 @@ export async function GET() {
     )
   }
 
+  // Diagnóstico: redirect_uri deve bater exatamente com o cadastrado no DevCenter (ex: https://precificapro-pi.vercel.app/api/ml/callback)
+  console.log('[ML auth] redirect_uri usado na URL de autorização:', redirectUri)
+  if (redirectUri !== 'https://precificapro-pi.vercel.app/api/ml/callback') {
+    console.warn('[ML auth] AVISO: redirect_uri difere do esperado em produção. DevCenter deve listar:', redirectUri)
+  }
+
   // Gerar state para segurança (CSRF protection)
   const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
   
-  // Construir URL de autorização
+  // Construir URL de autorização (redirect_uri URL-encoded)
   const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
   
   // Salvar state em cookie para validação no callback
