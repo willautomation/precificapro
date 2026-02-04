@@ -71,9 +71,8 @@ export function MLConnectBlock() {
     fetchMe()
   }, [])
 
-  const handleConnect = () => {
-    window.location.href = '/api/ml/auth'
-  }
+  // Caminho relativo: sem domínio, sem localhost. Funciona em qualquer origem (local ou Vercel).
+  const mlAuthPath = '/api/ml/auth'
 
   if (loading && !me) {
     return (
@@ -103,13 +102,12 @@ export function MLConnectBlock() {
 
   return (
     <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-      <button
-        type="button"
-        onClick={handleConnect}
-        className="btn-primary w-full"
+      <a
+        href={mlAuthPath}
+        className="btn-primary w-full block text-center"
       >
         Conectar Mercado Livre
-      </button>
+      </a>
       <p className="text-xs text-gray-500 mt-2">Conecte para ver reputação e origem da sua conta</p>
     </div>
   )

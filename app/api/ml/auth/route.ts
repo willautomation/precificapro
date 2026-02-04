@@ -7,24 +7,14 @@ export async function GET() {
   const redirectUri = process.env.ML_REDIRECT_URI
   
   if (!clientId) {
-    return NextResponse.json(
-      { error: 'ML_CLIENT_ID não configurado nas variáveis de ambiente' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Faltando ML_CLIENT_ID' }, { status: 500 })
   }
 
   if (!redirectUri) {
-    return NextResponse.json(
-      { error: 'ML_REDIRECT_URI não configurado nas variáveis de ambiente' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Faltando ML_REDIRECT_URI' }, { status: 500 })
   }
 
-  // Diagnóstico: redirect_uri deve bater exatamente com o cadastrado no DevCenter (ex: https://precificapro-pi.vercel.app/api/ml/callback)
-  console.log('[ML auth] redirect_uri usado na URL de autorização:', redirectUri)
-  if (redirectUri !== 'https://precificapro-pi.vercel.app/api/ml/callback') {
-    console.warn('[ML auth] AVISO: redirect_uri difere do esperado em produção. DevCenter deve listar:', redirectUri)
-  }
+  console.log('[ML auth] redirect_uri usado:', redirectUri)
 
   // Gerar state para segurança (CSRF protection)
   const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
