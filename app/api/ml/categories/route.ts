@@ -14,10 +14,11 @@ export async function GET() {
       next: { revalidate: 7 * 24 * 60 * 60 }, // Cache por 7 dias
       headers: {
         Accept: 'application/json',
+        // Esses headers ajudam a evitar bloqueio/403 em alguns ambientes (ex.: Vercel)
+        'User-Agent': 'PrecificaPRO/1.0 (+https://precificapro-pi.vercel.app)',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
       },
     })
-
-    clearTimeout(timeoutId)
 
     if (!response.ok) {
       let errorBody = ''
@@ -44,17 +45,29 @@ export async function GET() {
       return NextResponse.json(errorDetails, { status: response.status })
     }
 
+    // Se der algum problema no JSON, cai no catch
     const categories = await response.json()
     return NextResponse.json(categories)
-  } catch (error: any) {
-    clearTimeout(timeoutId)
+  } catch (error: unknown) {
+    let message = 'Erro desconhecido'
+    let name: string | undefined
+    let code: string | undefined
+    let stack: string | undefined
+
+    if (error && typeof error === 'object') {
+      const e = error as { message?: string; name?: string; code?: string; stack?: string; cause?: unknown }
+      message = e.message || message
+      name = e.name
+      code = e.code
+      stack = e.stack
+    }
 
     let errorDetails: any = {
       error: 'Erro ao buscar categorias do Mercado Livre',
-      message: error?.message || 'Erro desconhecido',
+      message,
     }
 
-    if (error?.name === 'AbortError' || error?.code === 'ECONNABORTED') {
+    if (name === 'AbortError' || code === 'ECONNABORTED') {
       errorDetails = {
         ...errorDetails,
         error: 'Timeout ao buscar categorias',
@@ -63,27 +76,28 @@ export async function GET() {
       }
     }
 
-    if (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND') {
+    if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') {
       errorDetails = {
         ...errorDetails,
         error: 'Erro de conexão',
-        message: error.message,
+        message,
         hint: 'Não foi possível conectar ao servidor do Mercado Livre',
       }
     }
 
-    if (process.env.NODE_ENV === 'development' && error?.stack) {
-      errorDetails.stack = error.stack
+    if (process.env.NODE_ENV === 'development' && stack) {
+      errorDetails.stack = stack
     }
 
     console.error('Erro completo ao buscar categorias:', {
-      name: error?.name,
-      message: error?.message,
-      code: error?.code,
-      stack: error?.stack,
-      cause: error?.cause,
+      name,
+      message,
+      code,
+      stack,
     })
 
     return NextResponse.json(errorDetails, { status: 500 })
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
