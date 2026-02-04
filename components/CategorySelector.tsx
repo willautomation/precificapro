@@ -26,47 +26,66 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Carregar categorias
+  const ML_CATEGORIES_URL = 'https://api.mercadolibre.com/sites/MLB/categories'
+
+  // Carregar categorias: direto do ML (evita 403 no server) com fallback para /api/ml/categories
   useEffect(() => {
     const loadCategories = async () => {
-      // Verificar cache
       const cached = localStorage.getItem(CACHE_KEY)
       if (cached) {
-        const cache = JSON.parse(cached)
-        const now = Date.now()
-        
-        if (now - cache.timestamp < CACHE_DURATION && cache.data) {
-          setCategories(cache.data)
-          setFilteredCategories(cache.data)
-          return
+        try {
+          const cache = JSON.parse(cached)
+          const now = Date.now()
+          if (now - cache.timestamp < CACHE_DURATION && cache.data?.length) {
+            setCategories(cache.data)
+            setFilteredCategories(cache.data)
+            setError(null)
+            return
+          }
+        } catch {
+          // cache inválido
         }
       }
 
       setLoading(true)
       setError(null)
-      
+
+      let data: Category[] | null = null
+
       try {
-        const response = await fetch('/api/ml/categories')
-        if (!response.ok) {
-          throw new Error('Erro ao buscar categorias')
+        const directResponse = await fetch(ML_CATEGORIES_URL, {
+          headers: { Accept: 'application/json' },
+        })
+        if (directResponse.ok) {
+          data = await directResponse.json()
         }
-        
-        const data = await response.json()
+      } catch {
+        // CORS ou rede: tentar proxy
+      }
+
+      if (!data?.length) {
+        try {
+          const proxyResponse = await fetch('/api/ml/categories')
+          if (proxyResponse.ok) {
+            data = await proxyResponse.json()
+          }
+        } catch {
+          // proxy falhou
+        }
+      }
+
+      if (data?.length) {
         setCategories(data)
         setFilteredCategories(data)
-        
-        // Salvar no cache
-        const cache = {
-          data,
-          timestamp: Date.now()
-        }
+        setError(null)
+        const cache = { data, timestamp: Date.now() }
         localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
-      } catch (err) {
+      } else {
         setError('Não foi possível carregar as categorias. Usando valores padrão.')
-        console.error('Erro ao carregar categorias:', err)
-      } finally {
-        setLoading(false)
+        console.error('Erro ao carregar categorias: direto e proxy falharam')
       }
+
+      setLoading(false)
     }
 
     loadCategories()
