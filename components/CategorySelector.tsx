@@ -26,7 +26,7 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Carregar categorias sempre do backend (usa token OAuth; evita 403 PolicyAgent)
+  // Carregar categorias: primário no browser (endpoint público ML) e fallback em /api/ml/categories
   useEffect(() => {
     const loadCategories = async () => {
       const cached = localStorage.getItem(CACHE_KEY)
@@ -48,24 +48,31 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
       setLoading(true)
       setError(null)
 
-      const headers: HeadersInit = { Accept: 'application/json' }
-      const token =
-        typeof window !== 'undefined' ? localStorage.getItem('ml_access_token') : null
-      if (token) {
-        (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
-      }
-
       let data: Category[] | null = null
+
+      // Primário: fetch direto no browser (endpoint público, sem token)
       try {
-        const res = await fetch('/api/ml/categories', {
-          credentials: 'include',
-          headers,
-        })
-        if (res.ok) {
-          data = await res.json()
+        const directRes = await fetch(
+          'https://api.mercadolibre.com/sites/MLB/categories',
+          { headers: { Accept: 'application/json' } }
+        )
+        if (directRes.ok) {
+          data = await directRes.json()
         }
       } catch {
-        // rede ou CORS
+        // CORS ou rede: tentar fallback
+      }
+
+      // Fallback: proxy do backend (pode falhar com 403 PolicyAgent no servidor)
+      if (!data?.length) {
+        try {
+          const proxyRes = await fetch('/api/ml/categories')
+          if (proxyRes.ok) {
+            data = await proxyRes.json()
+          }
+        } catch {
+          // proxy falhou
+        }
       }
 
       if (data?.length) {
@@ -75,8 +82,8 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
         const cache = { data, timestamp: Date.now() }
         localStorage.setItem(CACHE_KEY, JSON.stringify(cache))
       } else {
-        setError('Não foi possível carregar as categorias. Conecte o Mercado Livre e tente novamente.')
-        console.error('Erro ao carregar categorias: /api/ml/categories falhou ou sem token')
+        setError('Não foi possível carregar as categorias. Usando valores padrão.')
+        console.error('Erro ao carregar categorias: direto e fallback falharam')
       }
 
       setLoading(false)
