@@ -3,18 +3,11 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-interface TokenSuccess {
-  access_token: string
-  expires_in: number
+interface TokenResponse {
+  access_token?: string
+  expires_in?: number
   refresh_token?: string
 }
-
-interface TokenError {
-  error: string
-  message?: string
-}
-
-type TokenResponse = TokenSuccess | TokenError
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -65,28 +58,30 @@ export async function GET(req: Request) {
 
     const tokenData: TokenResponse = await tokenResponse.json()
 
-    if ('error' in tokenData) {
-      console.error('[ML CALLBACK] Erro no token:', tokenData)
+    if (!tokenData.access_token) {
+      console.error('[ML CALLBACK] Falha token:', {
+        status: tokenResponse.status,
+        body: tokenData,
+      })
       return redirect('/?ml_error=token_exchange_failed')
     }
 
-    const isProduction = process.env.NODE_ENV === 'production'
     const res = NextResponse.redirect(
       new URL('/?ml_auth=success', req.url)
     )
 
     res.cookies.set('ml_access_token', tokenData.access_token, {
       httpOnly: true,
-      secure: isProduction,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: tokenData.expires_in,
+      maxAge: tokenData.expires_in ?? 21600,
     })
 
     if (tokenData.refresh_token) {
       res.cookies.set('ml_refresh_token', tokenData.refresh_token, {
         httpOnly: true,
-        secure: isProduction,
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60 * 24 * 180,
