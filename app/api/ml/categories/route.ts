@@ -1,103 +1,29 @@
 import { NextResponse } from 'next/server'
 
-/**
- * Categorias do Mercado Livre: endpoint público.
- * Não exige login/token. Usa a API pública do ML.
- */
 export async function GET() {
-  const abortController = new AbortController()
-  const timeoutId = setTimeout(() => abortController.abort(), 10000) // 10 segundos
-
   try {
     const response = await fetch('https://api.mercadolibre.com/sites/MLB/categories', {
-      signal: abortController.signal,
-      next: { revalidate: 7 * 24 * 60 * 60 }, // Cache por 7 dias
       headers: {
         Accept: 'application/json',
-        // Esses headers ajudam a evitar bloqueio/403 em alguns ambientes (ex.: Vercel)
-        'User-Agent': 'PrecificaPRO/1.0 (+https://precificapro-pi.vercel.app)',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+        'User-Agent': 'Mozilla/5.0',
       },
+      cache: 'no-store',
     })
 
     if (!response.ok) {
-      let errorBody = ''
-      try {
-        errorBody = await response.text()
-      } catch {
-        errorBody = 'Não foi possível ler o corpo da resposta'
-      }
-
-      const errorDetails = {
-        error: 'Falha ao buscar categorias do Mercado Livre',
-        status: response.status,
-        statusText: response.statusText,
-        body: errorBody,
-        url: 'https://api.mercadolibre.com/sites/MLB/categories',
-      }
-
-      console.error('Erro na resposta da API do Mercado Livre:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorBody,
-      })
-
-      return NextResponse.json(errorDetails, { status: response.status })
+      const text = await response.text()
+      return NextResponse.json(
+        { error: 'ML categories error', status: response.status, body: text },
+        { status: response.status }
+      )
     }
 
-    // Se der algum problema no JSON, cai no catch
-    const categories = await response.json()
-    return NextResponse.json(categories)
-  } catch (error: unknown) {
-    let message = 'Erro desconhecido'
-    let name: string | undefined
-    let code: string | undefined
-    let stack: string | undefined
-
-    if (error && typeof error === 'object') {
-      const e = error as { message?: string; name?: string; code?: string; stack?: string; cause?: unknown }
-      message = e.message || message
-      name = e.name
-      code = e.code
-      stack = e.stack
-    }
-
-    let errorDetails: any = {
-      error: 'Erro ao buscar categorias do Mercado Livre',
-      message,
-    }
-
-    if (name === 'AbortError' || code === 'ECONNABORTED') {
-      errorDetails = {
-        ...errorDetails,
-        error: 'Timeout ao buscar categorias',
-        message: 'A requisição excedeu o tempo limite de 10 segundos',
-        hint: 'O servidor do Mercado Livre pode estar lento ou indisponível',
-      }
-    }
-
-    if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') {
-      errorDetails = {
-        ...errorDetails,
-        error: 'Erro de conexão',
-        message,
-        hint: 'Não foi possível conectar ao servidor do Mercado Livre',
-      }
-    }
-
-    if (process.env.NODE_ENV === 'development' && stack) {
-      errorDetails.stack = stack
-    }
-
-    console.error('Erro completo ao buscar categorias:', {
-      name,
-      message,
-      code,
-      stack,
-    })
-
-    return NextResponse.json(errorDetails, { status: 500 })
-  } finally {
-    clearTimeout(timeoutId)
+    const data = await response.json()
+    return NextResponse.json(data)
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err.message },
+      { status: 500 }
+    )
   }
 }
