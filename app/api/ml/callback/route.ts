@@ -56,7 +56,7 @@ export async function GET(req: Request) {
       }
     )
 
-    const tokenData: TokenResponse = await tokenResponse.json()
+    const tokenData = (await tokenResponse.json()) as TokenResponse
 
     if (!tokenData.access_token) {
       console.error('[ML CALLBACK] Falha token:', {
