@@ -68,9 +68,9 @@ export async function GET(req: Request) {
       return NextResponse.json(cached.data)
     }
 
-    // 3. Buscar itens do vendedor
+    // 3. Buscar itens do vendedor (limit/offset)
     const searchRes = await fetch(
-      `${ML_BASE}/users/${sellerId}/items/search?search_type=scan&limit=${MAX_ITEMS}`,
+      `${ML_BASE}/users/${sellerId}/items/search?limit=${MAX_ITEMS}&offset=0`,
       { headers }
     )
 

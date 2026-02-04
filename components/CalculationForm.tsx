@@ -127,9 +127,14 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
       }
     } else {
       input.mlPlan = mlPlan
-      // Passar percentuais da categoria se disponíveis
       input.categoryClassicoPercent = categoryClassicoPercent
       input.categoryPremiumPercent = categoryPremiumPercent
+      const peso = parseFloat(mlPesoG) || 0
+      if (peso > 0) input.mlPesoG = peso
+      if (typeof window !== 'undefined') {
+        input.mlReputationLevelId =
+          localStorage.getItem('ml_reputation') ?? undefined
+      }
     }
 
     onSubmit(input)
@@ -254,7 +259,10 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
         <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
           <MLConnectBlock />
 
-          <CategorySelector onCategorySelect={handleCategorySelect} />
+          <CategorySelector
+            priceForFees={parseFloat(productCost) || 100}
+            onCategorySelect={handleCategorySelect}
+          />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

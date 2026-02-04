@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { getReputationInfo } from '@/utils/mlReputation'
 
 const STORAGE_KEYS = {
   connected: 'ml_connected',
@@ -92,7 +93,7 @@ export function MLConnectBlock() {
         </div>
         <div className="text-sm text-gray-700 space-y-1">
           <p><span className="font-medium">Seller ID:</span> {me.seller_id}</p>
-          <p><span className="font-medium">Reputação:</span> {me.reputation || '–'}</p>
+          <p><span className="font-medium">Reputação:</span> {getReputationInfo(me.reputation).labelPt}</p>
           <p><span className="font-medium">Origem:</span> {me.origin || '–'}</p>
         </div>
         <p className="text-xs text-gray-500 mt-2">Detectado da sua conta</p>

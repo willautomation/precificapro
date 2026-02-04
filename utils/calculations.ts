@@ -5,6 +5,32 @@ import {
   AppConfig,
 } from '@/types'
 import { loadConfig } from './config'
+import { getReputationInfo } from './mlReputation'
+
+/** Tabela de frete estimado por faixa de peso (kg) - base para simulação ML */
+const ML_FREIGHT_TABLE_KG: { maxKg: number; fee: number }[] = [
+  { maxKg: 0.3, fee: 40.9 },
+  { maxKg: 0.5, fee: 41.9 },
+  { maxKg: 1, fee: 43.9 },
+  { maxKg: 2, fee: 46.9 },
+  { maxKg: 5, fee: 52.0 },
+  { maxKg: 9, fee: 83.9 },
+]
+
+function estimateMLFreight(pesoG: number, discountPct: number): number {
+  const pesoKg = pesoG / 1000
+  let freteBase = 0
+  for (const row of ML_FREIGHT_TABLE_KG) {
+    if (pesoKg <= row.maxKg) {
+      freteBase = row.fee
+      break
+    }
+  }
+  if (freteBase === 0 && pesoKg > 0) {
+    freteBase = ML_FREIGHT_TABLE_KG[ML_FREIGHT_TABLE_KG.length - 1].fee
+  }
+  return freteBase * (1 - discountPct)
+}
 
 function calculateShopeeFees(
   price: number,
@@ -81,7 +107,17 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   }
 
   const config = loadConfig()
-  const shippingPerUnit = input.shippingTotal / input.quantity
+  let shippingPerUnit = input.shippingTotal / input.quantity
+  // ML: usar frete estimado (peso + reputação) quando shippingTotal é 0
+  if (
+    input.platform === 'MercadoLivre' &&
+    input.shippingTotal === 0 &&
+    (input.mlPesoG ?? 0) > 0
+  ) {
+    const repInfo = getReputationInfo(input.mlReputationLevelId)
+    shippingPerUnit =
+      estimateMLFreight(input.mlPesoG!, repInfo.discountPct) / input.quantity
+  }
   const totalCost = input.productCost + input.otherCosts + shippingPerUnit
 
   let suggestedPrice = 0

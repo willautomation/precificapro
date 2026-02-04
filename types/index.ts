@@ -19,6 +19,10 @@ export interface CalculationInput {
   mlPlan?: MLPlan
   categoryClassicoPercent?: number | null
   categoryPremiumPercent?: number | null
+  /** Peso em gramas, para estimativa de frete quando shippingTotal é 0 */
+  mlPesoG?: number
+  /** level_id ou power_seller_status da API, para aplicar desconto na estimativa de frete */
+  mlReputationLevelId?: string | null
 }
 
 export interface CalculationResult {

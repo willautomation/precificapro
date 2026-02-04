@@ -8,13 +8,14 @@ interface Category {
 }
 
 interface CategorySelectorProps {
+  priceForFees?: number
   onCategorySelect: (classicoPercent: number | null, premiumPercent: number | null) => void
 }
 
 const CACHE_KEY = 'ml_categories_cache'
 const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000 // 7 dias
 
-export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
+export function CategorySelector({ priceForFees = 100, onCategorySelect }: CategorySelectorProps) {
   const [categories, setCategories] = useState<Category[]>([])
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -139,21 +140,28 @@ export function CategorySelector({ onCategorySelect }: CategorySelectorProps) {
     setShowDropdown(false)
     setLoadingFees(true)
     setError(null)
+    setNeedsConnect(false)
 
     try {
-      const response = await fetch(`/api/ml/fees?category_id=${category.id}`)
+      const url = `/api/ml/fees?categoryId=${encodeURIComponent(category.id)}&price=${encodeURIComponent(priceForFees)}`
+      const response = await fetch(url, { credentials: 'include' })
+
+      if (response.status === 401) {
+        setNeedsConnect(true)
+        onCategorySelect(null, null)
+        return
+      }
+
       if (!response.ok) {
         throw new Error('Erro ao buscar taxas')
       }
 
       const fees = await response.json()
-      
-      // Atualizar percentuais
+
       onCategorySelect(fees.classico, fees.premium)
     } catch (err) {
       setError('Não foi possível buscar as taxas desta categoria. Usando valores padrão.')
       console.error('Erro ao buscar taxas:', err)
-      // Usar valores padrão (null indica para usar os padrões)
       onCategorySelect(null, null)
     } finally {
       setLoadingFees(false)
