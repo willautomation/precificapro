@@ -6,6 +6,48 @@ import {
 } from '@/types'
 import { loadConfig } from './config'
 
+type SellerType = 'CPF' | 'CNPJ'
+
+interface ShopeeInput {
+  precoVenda: number
+  quantidade: number
+  sellerType: SellerType
+  participaFreteGratis: boolean
+}
+
+export function calcularShopeeOficial(input: ShopeeInput) {
+  const {
+    precoVenda,
+    quantidade,
+    sellerType,
+    participaFreteGratis,
+  } = input
+
+  const COMISSAO_PERCENT = 0.12
+  const TRANSACAO_PERCENT = 0.02
+  const TRANSPORTE_PERCENT = participaFreteGratis ? 0.06 : 0
+
+  const TAXA_FIXA = sellerType === 'CPF' ? 7 : 4
+
+  const percentualTotal =
+    COMISSAO_PERCENT +
+    TRANSACAO_PERCENT +
+    TRANSPORTE_PERCENT
+
+  const valorPercentual = precoVenda * percentualTotal
+  const valorFixo = TAXA_FIXA * quantidade
+
+  const totalTaxas = valorPercentual + valorFixo
+
+  return {
+    comissao: precoVenda * COMISSAO_PERCENT,
+    taxaTransacao: precoVenda * TRANSACAO_PERCENT,
+    taxaTransporte: precoVenda * TRANSPORTE_PERCENT,
+    taxaFixa: valorFixo,
+    totalTaxas,
+  }
+}
+
 function calcularPelaTabela(
   tabela: { min: number; max: number | null; fee: number }[],
   preco: number
@@ -28,7 +70,6 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   }
 
   const config = loadConfig()
-  const cfgShopee = config.shopee
   const cfgML = config.mercadoLivre
 
   const shippingPerUnit = input.shippingTotal / input.quantity
@@ -38,39 +79,28 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   let totalFees = 0
 
   if (input.platform === 'Shopee') {
-    let percent = cfgShopee.commissionPercent
-    if (input.shopeeFreeShippingProgram) {
-      percent += cfgShopee.freeShippingExtraPercent
-    }
-    if (input.shopeeCpfHighVolume && input.sellerType === 'CPF') {
-      percent += cfgShopee.cpfHighVolumeExtraPercent
-    }
-
-    let fixedFee =
-      input.sellerType === 'CPF'
-        ? cfgShopee.fixedFeeCPF
-        : cfgShopee.fixedFeeDefault
-    if (input.shopeeCpfHighVolume && input.sellerType === 'CPF') {
-      fixedFee += cfgShopee.cpfHighVolumeFixedFeeExtra
-    }
-
-    const pctTotal = percent / 100
-    const txPct = (cfgShopee.transactionFeePercent ?? 0) / 100
-    const trPct = (cfgShopee.transportFeePercent ?? 0) / 100
+    const participaFreteGratis = !!input.shopeeFreeShippingProgram
+    const TAXA_FIXA = input.sellerType === 'CPF' ? 7 : 4
+    const percentualTotal = 0.12 + 0.02 + (participaFreteGratis ? 0.06 : 0)
 
     if (input.objectiveType === 'lucro') {
       suggestedPrice =
-        (totalCost + input.objectiveValue + fixedFee) / (1 - pctTotal - txPct - trPct)
+        (totalCost + input.objectiveValue + TAXA_FIXA * input.quantity) /
+        (1 - percentualTotal)
     } else {
       const margem = input.objectiveValue / 100
-      suggestedPrice = (totalCost + fixedFee) / (1 - pctTotal - txPct - trPct - margem)
+      suggestedPrice =
+        (totalCost + TAXA_FIXA * input.quantity) /
+        (1 - percentualTotal - margem)
     }
 
-    totalFees =
-      suggestedPrice * pctTotal +
-      suggestedPrice * txPct +
-      suggestedPrice * trPct +
-      fixedFee
+    const shopee = calcularShopeeOficial({
+      precoVenda: suggestedPrice,
+      quantidade: input.quantity,
+      sellerType: input.sellerType,
+      participaFreteGratis,
+    })
+    totalFees = shopee.totalTaxas
   } else {
     let taxaPercentualML =
       input.mlPlan === 'premium'
@@ -119,32 +149,20 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   let breakdown: CalculationResult['breakdown']
 
   if (input.platform === 'Shopee') {
-    const pctBase = cfgShopee.commissionPercent
-    const pctFreteGratis = input.shopeeFreeShippingProgram
-      ? cfgShopee.freeShippingExtraPercent
-      : 0
-    const pctHighVolume =
-      input.shopeeCpfHighVolume && input.sellerType === 'CPF'
-        ? cfgShopee.cpfHighVolumeExtraPercent
-        : 0
-    const fixedFee =
-      input.sellerType === 'CPF'
-        ? cfgShopee.fixedFeeCPF
-        : cfgShopee.fixedFeeDefault
-    const fixedFeeExtra =
-      input.shopeeCpfHighVolume && input.sellerType === 'CPF'
-        ? cfgShopee.cpfHighVolumeFixedFeeExtra
-        : 0
-    const txPct = cfgShopee.transactionFeePercent ?? 0
-    const trPct = cfgShopee.transportFeePercent ?? 0
+    const shopee = calcularShopeeOficial({
+      precoVenda: suggestedPrice,
+      quantidade: input.quantity,
+      sellerType: input.sellerType,
+      participaFreteGratis: !!input.shopeeFreeShippingProgram,
+    })
     breakdown = {
       productCost: input.productCost,
       shippingPerUnit,
       otherCosts: input.otherCosts,
-      commission: suggestedPrice * ((pctBase + pctFreteGratis + pctHighVolume) / 100),
-      transactionFee: txPct > 0 ? suggestedPrice * (txPct / 100) : 0,
-      transportFee: trPct > 0 ? suggestedPrice * (trPct / 100) : 0,
-      fixedFee: fixedFee + fixedFeeExtra,
+      commission: shopee.comissao,
+      transactionFee: shopee.taxaTransacao,
+      transportFee: shopee.taxaTransporte,
+      fixedFee: shopee.taxaFixa,
     }
   } else {
     let taxaPercentualML =
