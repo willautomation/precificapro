@@ -89,10 +89,8 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
     }
 
     if (platform === 'Shopee') {
-      input.freeShipping = freeShipping
-      if (sellerType === 'CPF') {
-        input.cpfHighVolume = cpfHighVolume
-      }
+      input.shopeeFreeShippingProgram = freeShipping
+      input.shopeeCpfHighVolume = cpfHighVolume
     } else {
       input.mlPlan = mlPlan
       input.mlSaleFeePercent = mlPlan === 'premium' ? mlPremiumSaleFee : mlClassicoSaleFee

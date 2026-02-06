@@ -13,8 +13,8 @@ export interface CalculationInput {
   objectiveType: ObjectiveType
   objectiveValue: number
   // Shopee specific
-  freeShipping?: boolean
-  cpfHighVolume?: boolean
+  shopeeFreeShippingProgram?: boolean
+  shopeeCpfHighVolume?: boolean
   // Mercado Livre specific
   mlPlan?: MLPlan
   /** Taxa percentual de venda da categoria (API ML) */
