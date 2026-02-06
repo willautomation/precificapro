@@ -8,7 +8,8 @@ const DEFAULT_SHOPEE_CONFIG: ShopeeConfig = {
   fixedFeeCPF: 7,
   freeShippingExtraPercent: 6,
   cpfHighVolumeExtraPercent: 0,
-  cpfHighVolumeFixedFeeExtra: 0,
+  cpfHighVolumeFixedFeeExtra: 7,
+  commissionCapPerItem: 100,
 }
 
 const DEFAULT_ML_CONFIG: MercadoLivreConfig = {
@@ -54,13 +55,16 @@ export function loadConfig(): AppConfig {
             config.shopee.cpfHighVolumeExtraPercent = 0
           }
           if (config.shopee.cpfHighVolumeFixedFeeExtra == null) {
-            config.shopee.cpfHighVolumeFixedFeeExtra = 0
+            config.shopee.cpfHighVolumeFixedFeeExtra = 7
           }
           if (config.shopee.transactionFeePercent == null) {
             config.shopee.transactionFeePercent = 2
           }
           if (config.shopee.transportFeePercent == null) {
             config.shopee.transportFeePercent = 6
+          }
+          if (config.shopee.commissionCapPerItem == null) {
+            config.shopee.commissionCapPerItem = 100
           }
         }
         // Migração: se existir defaultCategoryPercent antigo, converter para os novos campos

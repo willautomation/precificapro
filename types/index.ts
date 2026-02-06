@@ -59,6 +59,7 @@ export interface ShopeeConfig {
   freeShippingExtraPercent: number
   cpfHighVolumeExtraPercent: number
   cpfHighVolumeFixedFeeExtra: number
+  commissionCapPerItem?: number
 }
 
 export interface MercadoLivreConfig {
