@@ -52,10 +52,13 @@ export interface SimulationResult {
 
 export interface ShopeeConfig {
   commissionPercent: number
-  transactionFeePercent: number
-  transportFeePercent: number
+  transactionFeePercent?: number
+  transportFeePercent?: number
   fixedFeeDefault: number
   fixedFeeCPF: number
+  freeShippingExtraPercent: number
+  cpfHighVolumeExtraPercent: number
+  cpfHighVolumeFixedFeeExtra: number
 }
 
 export interface MercadoLivreConfig {

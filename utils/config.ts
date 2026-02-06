@@ -6,6 +6,9 @@ const DEFAULT_SHOPEE_CONFIG: ShopeeConfig = {
   transportFeePercent: 6,
   fixedFeeDefault: 4,
   fixedFeeCPF: 7,
+  freeShippingExtraPercent: 6,
+  cpfHighVolumeExtraPercent: 0,
+  cpfHighVolumeFixedFeeExtra: 0,
 }
 
 const DEFAULT_ML_CONFIG: MercadoLivreConfig = {
@@ -42,6 +45,24 @@ export function loadConfig(): AppConfig {
       try {
         const config = JSON.parse(saved) as any
         
+        // Migração Shopee: garantir novos campos e opcionais
+        if (config.shopee) {
+          if (config.shopee.freeShippingExtraPercent == null) {
+            config.shopee.freeShippingExtraPercent = 6
+          }
+          if (config.shopee.cpfHighVolumeExtraPercent == null) {
+            config.shopee.cpfHighVolumeExtraPercent = 0
+          }
+          if (config.shopee.cpfHighVolumeFixedFeeExtra == null) {
+            config.shopee.cpfHighVolumeFixedFeeExtra = 0
+          }
+          if (config.shopee.transactionFeePercent == null) {
+            config.shopee.transactionFeePercent = 2
+          }
+          if (config.shopee.transportFeePercent == null) {
+            config.shopee.transportFeePercent = 6
+          }
+        }
         // Migração: se existir defaultCategoryPercent antigo, converter para os novos campos
         if (config.mercadoLivre && 'defaultCategoryPercent' in config.mercadoLivre) {
           const oldPercent = config.mercadoLivre.defaultCategoryPercent
