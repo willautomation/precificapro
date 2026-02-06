@@ -30,6 +30,26 @@ function calculateShopeeFees(
   return { commission, transactionFee, transportFee, fixedFee }
 }
 
+function calculateMLFixedFee(price: number, config: AppConfig): number {
+  const { fixedFeeTable } = config.mercadoLivre
+
+  if (price < 12.50) {
+    return price / 2
+  }
+
+  for (const range of fixedFeeTable) {
+    if (range.max === null) {
+      if (price >= range.min) return range.fee
+    } else {
+      if (price >= range.min && price < range.max) {
+        return range.fee
+      }
+    }
+  }
+
+  return 0
+}
+
 export function calculatePrice(input: CalculationInput): CalculationResult | null {
   if (input.productCost <= 0 || input.quantity <= 0) {
     return null
@@ -66,18 +86,43 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
     const fees = calculateShopeeFees(suggestedPrice, input, config)
     totalFees = fees.commission + fees.transactionFee + fees.transportFee + fees.fixedFee
   } else {
-    const saleFeePct = input.mlSaleFeePercent ?? 12
-    const fixedFee = input.mlFixedFee ?? 0
-    const percentual = saleFeePct
+    const { defaultCategoryPercentClassico, defaultCategoryPercentPremium } = config.mercadoLivre
+    const categoryPercent =
+      input.mlSaleFeePercent != null
+        ? input.mlSaleFeePercent
+        : input.mlPlan === 'premium'
+          ? defaultCategoryPercentPremium
+          : defaultCategoryPercentClassico
+    const percentual = categoryPercent
+
+    const getFixedFee = (p: number) =>
+      input.mlFixedFee != null ? input.mlFixedFee : calculateMLFixedFee(p, config)
 
     if (input.objectiveType === 'lucro') {
-      suggestedPrice = (totalCost + input.objectiveValue + fixedFee) / (1 - percentual / 100)
+      suggestedPrice = (totalCost + input.objectiveValue) / (1 - percentual / 100)
+      let lastPrice = 0
+      let iterations = 0
+      while (Math.abs(suggestedPrice - lastPrice) > 0.01 && iterations < 100) {
+        lastPrice = suggestedPrice
+        const fixedFee = getFixedFee(suggestedPrice)
+        suggestedPrice = (totalCost + input.objectiveValue + fixedFee) / (1 - percentual / 100)
+        iterations++
+      }
     } else {
       const margem = input.objectiveValue / 100
-      suggestedPrice = (totalCost + fixedFee) / (1 - percentual / 100 - margem)
+      suggestedPrice = totalCost / (1 - percentual / 100 - margem)
+      let lastPrice = 0
+      let iterations = 0
+      while (Math.abs(suggestedPrice - lastPrice) > 0.01 && iterations < 100) {
+        lastPrice = suggestedPrice
+        const fixedFee = getFixedFee(suggestedPrice)
+        suggestedPrice = (totalCost + fixedFee) / (1 - percentual / 100 - margem)
+        iterations++
+      }
     }
 
-    totalFees = suggestedPrice * (percentual / 100) + fixedFee
+    const finalFixedFee = getFixedFee(suggestedPrice)
+    totalFees = suggestedPrice * (percentual / 100) + finalFixedFee
   }
 
   const profitPerSale = suggestedPrice - totalFees - totalCost
@@ -96,16 +141,23 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
       fixedFee: fees.fixedFee,
     }
   } else {
-    const saleFeePct = input.mlSaleFeePercent ?? 12
-    const fixedFee = input.mlFixedFee ?? 0
+    const { defaultCategoryPercentClassico, defaultCategoryPercentPremium } = config.mercadoLivre
+    const categoryPercent =
+      input.mlSaleFeePercent != null
+        ? input.mlSaleFeePercent
+        : input.mlPlan === 'premium'
+          ? defaultCategoryPercentPremium
+          : defaultCategoryPercentClassico
+    const fixedFee =
+      input.mlFixedFee != null ? input.mlFixedFee : calculateMLFixedFee(suggestedPrice, config)
     breakdown = {
       productCost: input.productCost,
       shippingPerUnit,
       otherCosts: input.otherCosts,
-      commission: suggestedPrice * (saleFeePct / 100),
+      commission: suggestedPrice * (categoryPercent / 100),
       transactionFee: 0,
       fixedFee,
-      categoryPercent: saleFeePct,
+      categoryPercent,
     }
   }
 
