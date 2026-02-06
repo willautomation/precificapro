@@ -6,47 +6,19 @@ import {
 } from '@/types'
 import { loadConfig } from './config'
 
-function calculateShopeeFees(
-  price: number,
-  input: CalculationInput,
-  config: AppConfig
-): { commission: number; transactionFee: number; transportFee: number; fixedFee: number } {
-  const { shopee } = config
-  const { sellerType, freeShipping, cpfHighVolume } = input
-
-  const commission = price * (shopee.commissionPercent / 100)
-  const transactionFee = price * (shopee.transactionFeePercent / 100)
-
-  let transportFee = 0
-  if (freeShipping) {
-    transportFee = price * (shopee.transportFeePercent / 100)
-  }
-
-  let fixedFee = shopee.fixedFeeDefault
-  if (sellerType === 'CPF') {
-    fixedFee = cpfHighVolume ? shopee.fixedFeeCPF : shopee.fixedFeeDefault
-  }
-
-  return { commission, transactionFee, transportFee, fixedFee }
-}
-
-function calculateMLFixedFee(price: number, config: AppConfig): number {
-  const { fixedFeeTable } = config.mercadoLivre
-
-  if (price < 12.50) {
-    return price / 2
-  }
-
-  for (const range of fixedFeeTable) {
+function calcularPelaTabela(
+  tabela: { min: number; max: number | null; fee: number }[],
+  preco: number
+): number {
+  for (const range of tabela) {
     if (range.max === null) {
-      if (price >= range.min) return range.fee
+      if (preco >= range.min) return range.fee
     } else {
-      if (price >= range.min && price < range.max) {
+      if (preco >= range.min && preco < range.max) {
         return range.fee
       }
     }
   }
-
   return 0
 }
 
@@ -56,6 +28,9 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   }
 
   const config = loadConfig()
+  const cfgShopee = config.shopee
+  const cfgML = config.mercadoLivre
+
   const shippingPerUnit = input.shippingTotal / input.quantity
   const totalCost = input.productCost + input.otherCosts + shippingPerUnit
 
@@ -63,66 +38,63 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   let totalFees = 0
 
   if (input.platform === 'Shopee') {
-    const { commissionPercent, transactionFeePercent, transportFeePercent } = config.shopee
-    const { sellerType, freeShipping, cpfHighVolume } = input
-
-    let percentual = commissionPercent + transactionFeePercent
-    if (freeShipping) percentual += transportFeePercent
-
-    let fixedFee: number
-    if (sellerType === 'CPF' && cpfHighVolume) {
-      fixedFee = config.shopee.fixedFeeCPF
-    } else {
-      fixedFee = config.shopee.fixedFeeDefault
-    }
+    const taxaPercentualShopee = cfgShopee.commissionPercent / 100
+    const taxaFixaShopee =
+      input.sellerType === 'CPF'
+        ? cfgShopee.fixedFeeCPF
+        : cfgShopee.fixedFeeDefault
 
     if (input.objectiveType === 'lucro') {
-      suggestedPrice = (totalCost + input.objectiveValue + fixedFee) / (1 - percentual / 100)
+      suggestedPrice =
+        (totalCost + input.objectiveValue + taxaFixaShopee) / (1 - taxaPercentualShopee)
     } else {
       const margem = input.objectiveValue / 100
-      suggestedPrice = (totalCost + fixedFee) / (1 - percentual / 100 - margem)
+      suggestedPrice = (totalCost + taxaFixaShopee) / (1 - taxaPercentualShopee - margem)
     }
 
-    const fees = calculateShopeeFees(suggestedPrice, input, config)
-    totalFees = fees.commission + fees.transactionFee + fees.transportFee + fees.fixedFee
+    const comissao = suggestedPrice * taxaPercentualShopee
+    totalFees = comissao + taxaFixaShopee
   } else {
-    const { defaultCategoryPercentClassico, defaultCategoryPercentPremium } = config.mercadoLivre
-    const categoryPercent =
-      input.mlSaleFeePercent != null
-        ? input.mlSaleFeePercent
-        : input.mlPlan === 'premium'
-          ? defaultCategoryPercentPremium
-          : defaultCategoryPercentClassico
-    const percentual = categoryPercent
+    let taxaPercentualML =
+      input.mlPlan === 'premium'
+        ? cfgML.defaultCategoryPercentPremium / 100
+        : cfgML.defaultCategoryPercentClassico / 100
 
-    const getFixedFee = (p: number) =>
-      input.mlFixedFee != null ? input.mlFixedFee : calculateMLFixedFee(p, config)
+    if (input.mlSaleFeePercent != null) {
+      taxaPercentualML = input.mlSaleFeePercent / 100
+    }
+
+    const getTaxaFixa = (preco: number) =>
+      input.mlFixedFee != null
+        ? input.mlFixedFee
+        : calcularPelaTabela(cfgML.fixedFeeTable, preco)
 
     if (input.objectiveType === 'lucro') {
-      suggestedPrice = (totalCost + input.objectiveValue) / (1 - percentual / 100)
+      suggestedPrice = (totalCost + input.objectiveValue) / (1 - taxaPercentualML)
       let lastPrice = 0
       let iterations = 0
       while (Math.abs(suggestedPrice - lastPrice) > 0.01 && iterations < 100) {
         lastPrice = suggestedPrice
-        const fixedFee = getFixedFee(suggestedPrice)
-        suggestedPrice = (totalCost + input.objectiveValue + fixedFee) / (1 - percentual / 100)
+        const taxaFixaML = getTaxaFixa(suggestedPrice)
+        suggestedPrice =
+          (totalCost + input.objectiveValue + taxaFixaML) / (1 - taxaPercentualML)
         iterations++
       }
     } else {
       const margem = input.objectiveValue / 100
-      suggestedPrice = totalCost / (1 - percentual / 100 - margem)
+      suggestedPrice = totalCost / (1 - taxaPercentualML - margem)
       let lastPrice = 0
       let iterations = 0
       while (Math.abs(suggestedPrice - lastPrice) > 0.01 && iterations < 100) {
         lastPrice = suggestedPrice
-        const fixedFee = getFixedFee(suggestedPrice)
-        suggestedPrice = (totalCost + fixedFee) / (1 - percentual / 100 - margem)
+        const taxaFixaML = getTaxaFixa(suggestedPrice)
+        suggestedPrice = (totalCost + taxaFixaML) / (1 - taxaPercentualML - margem)
         iterations++
       }
     }
 
-    const finalFixedFee = getFixedFee(suggestedPrice)
-    totalFees = suggestedPrice * (percentual / 100) + finalFixedFee
+    const taxaFixaML = getTaxaFixa(suggestedPrice)
+    totalFees = suggestedPrice * taxaPercentualML + taxaFixaML
   }
 
   const profitPerSale = suggestedPrice - totalFees - totalCost
@@ -130,33 +102,39 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   let breakdown: CalculationResult['breakdown']
 
   if (input.platform === 'Shopee') {
-    const fees = calculateShopeeFees(suggestedPrice, input, config)
+    const taxaPercentualShopee = cfgShopee.commissionPercent / 100
+    const taxaFixaShopee =
+      input.sellerType === 'CPF'
+        ? cfgShopee.fixedFeeCPF
+        : cfgShopee.fixedFeeDefault
     breakdown = {
       productCost: input.productCost,
       shippingPerUnit,
       otherCosts: input.otherCosts,
-      commission: fees.commission,
-      transactionFee: fees.transactionFee,
-      transportFee: fees.transportFee,
-      fixedFee: fees.fixedFee,
+      commission: suggestedPrice * taxaPercentualShopee,
+      transactionFee: 0,
+      fixedFee: taxaFixaShopee,
     }
   } else {
-    const { defaultCategoryPercentClassico, defaultCategoryPercentPremium } = config.mercadoLivre
-    const categoryPercent =
-      input.mlSaleFeePercent != null
-        ? input.mlSaleFeePercent
-        : input.mlPlan === 'premium'
-          ? defaultCategoryPercentPremium
-          : defaultCategoryPercentClassico
-    const fixedFee =
-      input.mlFixedFee != null ? input.mlFixedFee : calculateMLFixedFee(suggestedPrice, config)
+    let taxaPercentualML =
+      input.mlPlan === 'premium'
+        ? cfgML.defaultCategoryPercentPremium / 100
+        : cfgML.defaultCategoryPercentClassico / 100
+    if (input.mlSaleFeePercent != null) {
+      taxaPercentualML = input.mlSaleFeePercent / 100
+    }
+    const taxaFixaML =
+      input.mlFixedFee != null
+        ? input.mlFixedFee
+        : calcularPelaTabela(cfgML.fixedFeeTable, suggestedPrice)
+    const categoryPercent = taxaPercentualML * 100
     breakdown = {
       productCost: input.productCost,
       shippingPerUnit,
       otherCosts: input.otherCosts,
-      commission: suggestedPrice * (categoryPercent / 100),
+      commission: suggestedPrice * taxaPercentualML,
       transactionFee: 0,
-      fixedFee,
+      fixedFee: taxaFixaML,
       categoryPercent,
     }
   }
