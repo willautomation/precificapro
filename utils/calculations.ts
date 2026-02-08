@@ -212,14 +212,12 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
     })
     totalFees = shopee.totalTaxas
   } else {
-    let taxaPercentualML =
+    const defaultPercent =
       input.mlPlan === 'premium'
         ? cfgML.defaultCategoryPercentPremium / 100
         : cfgML.defaultCategoryPercentClassico / 100
-
-    if (input.mlSaleFeePercent != null) {
-      taxaPercentualML = input.mlSaleFeePercent / 100
-    }
+    const taxaPercentualML =
+      (input.mlSaleFeePercent != null ? input.mlSaleFeePercent / 100 : undefined) ?? defaultPercent
 
     const getTaxaFixa = (precoVenda: number) =>
       (input.mlFixedFee != null && input.mlFixedFee > 0)
@@ -277,13 +275,12 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
       extraCPF450: input.sellerType === 'CPF' ? shopee.extraCPF450 : undefined,
     }
   } else {
-    let taxaPercentualML =
+    const defaultPercent =
       input.mlPlan === 'premium'
         ? cfgML.defaultCategoryPercentPremium / 100
         : cfgML.defaultCategoryPercentClassico / 100
-    if (input.mlSaleFeePercent != null) {
-      taxaPercentualML = input.mlSaleFeePercent / 100
-    }
+    const taxaPercentualML =
+      (input.mlSaleFeePercent != null ? input.mlSaleFeePercent / 100 : undefined) ?? defaultPercent
     const taxaFixaML =
       (input.mlFixedFee != null && input.mlFixedFee > 0)
         ? input.mlFixedFee

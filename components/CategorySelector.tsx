@@ -1,6 +1,11 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState } from 'react'
+
+interface CategoryOption {
+  id: string
+  name: string
+}
 
 interface CategorySelectorProps {
   onCategoryResolved: (
@@ -15,34 +20,52 @@ interface CategorySelectorProps {
 
 export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) {
   const [searchText, setSearchText] = useState('')
-  const [resolvedCategory, setResolvedCategory] = useState<{ id: string; name: string } | null>(null)
+  const [options, setOptions] = useState<CategoryOption[]>([])
+  const [resolvedCategory, setResolvedCategory] = useState<CategoryOption | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const searchByText = async (text: string) => {
-    const q = text.trim()
+  const doSearch = async () => {
+    const q = searchText.trim()
     if (!q) {
-      setResolvedCategory(null)
-      onCategoryResolved(null, null, null, null, null, null)
+      setOptions([])
+      setError(null)
       return
     }
     setLoading(true)
     setError(null)
+    setOptions([])
+    setResolvedCategory(null)
+    onCategoryResolved(null, null, null, null, null, null)
     try {
       const res = await fetch(
         `https://api.mercadolibre.com/sites/MLB/domain_discovery/search?q=${encodeURIComponent(q)}`
       )
       if (!res.ok) throw new Error('Falha na busca')
       const data = await res.json()
-      const first = Array.isArray(data) ? data[0] : null
-      if (!first?.category_id) {
-        setResolvedCategory(null)
-        onCategoryResolved(null, null, null, null, null, null)
-        return
-      }
-      const cat = { id: first.category_id, name: first.category_name ?? first.category_id }
-      setResolvedCategory(cat)
+      const arr = Array.isArray(data) ? data : []
+      const list: CategoryOption[] = arr
+        .filter((x: { category_id?: string }) => x?.category_id)
+        .map((x: { category_id: string; category_name?: string }) => ({
+          id: x.category_id,
+          name: x.category_name ?? x.category_id,
+        }))
+      setOptions(list)
+      if (list.length === 0) setError('Nenhuma categoria encontrada.')
+    } catch {
+      setError('Não foi possível buscar categorias.')
+      setOptions([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSelect = async (cat: CategoryOption) => {
+    setResolvedCategory(cat)
+    setOptions([])
+    setSearchText(cat.name)
+    setError(null)
+    try {
       const feeRes = await fetch(
         `/api/ml/fees?category_id=${encodeURIComponent(cat.id)}`
       )
@@ -60,31 +83,23 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
         onCategoryResolved(cat.id, cat.name, null, null, null, null)
       }
     } catch {
-      setError('Não foi possível identificar a categoria.')
-      setResolvedCategory(null)
-      onCategoryResolved(null, null, null, null, null, null)
-    } finally {
-      setLoading(false)
+      onCategoryResolved(cat.id, cat.name, null, null, null, null)
     }
-  }
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value
-    setSearchText(v)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (!v.trim()) {
-      setResolvedCategory(null)
-      onCategoryResolved(null, null, null, null, null, null)
-      return
-    }
-    debounceRef.current = setTimeout(() => searchByText(v), 400)
   }
 
   const handleClear = () => {
     setSearchText('')
+    setOptions([])
     setResolvedCategory(null)
     setError(null)
     onCategoryResolved(null, null, null, null, null, null)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      doSearch()
+    }
   }
 
   return (
@@ -92,28 +107,52 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
       <label className="block text-sm font-medium text-gray-700 mb-2">
         Categoria do Produto (Mercado Livre)
       </label>
-      <div className="relative">
+      <div className="flex gap-2">
         <input
           type="text"
           value={searchText}
-          onChange={handleChange}
+          onChange={(e) => setSearchText(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Ex: celular samsung"
-          className="input-field"
+          className="input-field flex-1"
           disabled={loading}
         />
+        <button
+          type="button"
+          onClick={doSearch}
+          disabled={loading}
+          className="btn-primary whitespace-nowrap"
+        >
+          Buscar
+        </button>
         {resolvedCategory && (
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 text-sm font-medium"
+            className="btn-secondary whitespace-nowrap"
           >
             Limpar
           </button>
         )}
       </div>
-      {loading && <p className="text-sm text-gray-500">Buscando categoria...</p>}
+      {loading && <p className="text-sm text-gray-500">Buscando categorias...</p>}
       {error && <p className="text-sm text-amber-600">{error}</p>}
-      {resolvedCategory && !loading && (
+      {options.length > 0 && (
+        <ul className="border border-gray-200 rounded-lg divide-y divide-gray-200 max-h-48 overflow-y-auto">
+          {options.map((opt) => (
+            <li key={opt.id}>
+              <button
+                type="button"
+                onClick={() => handleSelect(opt)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
+              >
+                {opt.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {resolvedCategory && !loading && options.length === 0 && (
         <p className="text-sm text-green-600">
           ✓ {resolvedCategory.name}
         </p>
