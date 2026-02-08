@@ -38,6 +38,7 @@ export interface CalculationResult {
     transactionFee: number
     transportFee?: number
     fixedFee: number
+    extraCPF450?: number
     categoryPercent?: number
   }
 }
@@ -59,6 +60,8 @@ export interface ShopeeConfig {
   freeShippingExtraPercent: number
   cpfHighVolumeExtraPercent: number
   cpfHighVolumeFixedFeeExtra: number
+  /** R$ por item para checkbox "Sou CPF com mais de 450 pedidos nos últimos 90 dias" */
+  cpfHighVolumeExtraFixed?: number
   commissionCapPerItem?: number
 }
 

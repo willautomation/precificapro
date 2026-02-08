@@ -123,6 +123,14 @@ export function CalculationResults({ result }: CalculationResultsProps) {
                 {formatCurrency(result.breakdown.fixedFee)}
               </span>
             </div>
+            {result.breakdown.extraCPF450 !== undefined && result.breakdown.extraCPF450 > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Extra CPF 450+ (por item):</span>
+                <span className="font-semibold text-red-600">
+                  {formatCurrency(result.breakdown.extraCPF450)}
+                </span>
+              </div>
+            )}
             <div className="pt-2 mt-2 border-t border-gray-300 flex justify-between text-lg font-bold">
               <span>Lucro Líquido:</span>
               <span className="text-green-600">{formatCurrency(result.profitPerSale)}</span>

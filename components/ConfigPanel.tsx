@@ -143,6 +143,18 @@ export function ConfigPanel({ isOpen, onClose }: ConfigPanelProps) {
                   className="input-field"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Extra CPF 450+ (R$ por item)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={config.shopee.cpfHighVolumeExtraFixed ?? 7}
+                  onChange={(e) => updateShopeeConfig('cpfHighVolumeExtraFixed', parseFloat(e.target.value) || 0)}
+                  className="input-field"
+                />
+              </div>
             </div>
           </div>
 

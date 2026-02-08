@@ -2,7 +2,6 @@ import {
   CalculationInput,
   CalculationResult,
   SimulationResult,
-  AppConfig,
 } from '@/types'
 import { loadConfig } from './config'
 
@@ -21,17 +20,18 @@ interface ShopeeFeesPerItem {
   taxaTransacao: number
   taxaTransporte: number
   taxaFixa: number
+  extraCPF450: number
   totalPorItem: number
 }
 
-function getShopeeConfigValues(config: AppConfig) {
-  const s = config.shopee
+function getShopeeConfigValues(shopeeConfig: { commissionPercent?: number; transactionFeePercent?: number; transportFeePercent?: number; fixedFeeDefault?: number; fixedFeeCPF?: number; cpfHighVolumeFixedFeeExtra?: number; cpfHighVolumeExtraFixed?: number; commissionCapPerItem?: number }) {
+  const s = shopeeConfig
   const commissionPercent = (s.commissionPercent ?? 12) / 100
   const transactionPercent = (s.transactionFeePercent ?? 2) / 100
   const transportPercent = s.transportFeePercent ?? 6
   const fixedFeeDefault = s.fixedFeeDefault ?? 4
   const fixedFeeCPF = s.fixedFeeCPF ?? 7
-  const cpfHighVolumeExtra = s.cpfHighVolumeFixedFeeExtra ?? 7
+  const cpfHighVolumeExtra = s.cpfHighVolumeExtraFixed ?? s.cpfHighVolumeFixedFeeExtra ?? 7
   const commissionCapPerItem = s.commissionCapPerItem ?? 100
   return {
     commissionPercent,
@@ -49,10 +49,11 @@ export function calcularShopeeOficial(input: ShopeeInput): {
   taxaTransacao: number
   taxaTransporte: number
   taxaFixa: number
+  extraCPF450: number
   totalTaxas: number
 } {
   const config = loadConfig()
-  const cfg = getShopeeConfigValues(config)
+  const cfg = getShopeeConfigValues(config.shopee)
 
   const { precoVenda, quantidade, sellerType, participaFreteGratis, cpfHighVolume } = input
 
@@ -69,9 +70,6 @@ export function calcularShopeeOficial(input: ShopeeInput): {
     fixedFeeBase = cfg.fixedFeeDefault
   } else {
     fixedFeeBase = cfg.fixedFeeCPF
-    if (cpfHighVolume) {
-      fixedFeeBase += cfg.cpfHighVolumeExtra
-    }
   }
 
   let taxaFixaPorItem = fixedFeeBase
@@ -79,7 +77,10 @@ export function calcularShopeeOficial(input: ShopeeInput): {
     taxaFixaPorItem = Math.min(fixedFeeBase, precoVenda / 2)
   }
 
-  const totalPorItem = comissao + taxaTransacao + taxaTransporte + taxaFixaPorItem
+  const extraPorItem = sellerType === 'CPF' && cpfHighVolume ? (cfg.cpfHighVolumeExtra ?? 7) : 0
+  const extraCPF450Total = extraPorItem * quantidade
+
+  const totalPorItem = comissao + taxaTransacao + taxaTransporte + taxaFixaPorItem + extraPorItem
   const totalTaxas = totalPorItem * quantidade
 
   return {
@@ -87,6 +88,7 @@ export function calcularShopeeOficial(input: ShopeeInput): {
     taxaTransacao: taxaTransacao * quantidade,
     taxaTransporte: taxaTransporte * quantidade,
     taxaFixa: taxaFixaPorItem * quantidade,
+    extraCPF450: extraCPF450Total,
     totalTaxas,
   }
 }
@@ -99,7 +101,7 @@ function calcularTaxasShopeePorPreco(
   cpfHighVolume: boolean
 ): ShopeeFeesPerItem & { totalTaxas: number } {
   const config = loadConfig()
-  const cfg = getShopeeConfigValues(config)
+  const cfg = getShopeeConfigValues(config.shopee)
 
   const transportPercent = participaFreteGratis ? cfg.transportPercent / 100 : 0
 
@@ -114,9 +116,6 @@ function calcularTaxasShopeePorPreco(
     fixedFeeBase = cfg.fixedFeeDefault
   } else {
     fixedFeeBase = cfg.fixedFeeCPF
-    if (cpfHighVolume) {
-      fixedFeeBase += cfg.cpfHighVolumeExtra
-    }
   }
 
   let taxaFixaPorItem = fixedFeeBase
@@ -124,13 +123,15 @@ function calcularTaxasShopeePorPreco(
     taxaFixaPorItem = Math.min(fixedFeeBase, precoVenda / 2)
   }
 
-  const totalPorItem = comissao + taxaTransacao + taxaTransporte + taxaFixaPorItem
+  const extraPorItem = sellerType === 'CPF' && cpfHighVolume ? (cfg.cpfHighVolumeExtra ?? 7) : 0
+  const totalPorItem = comissao + taxaTransacao + taxaTransporte + taxaFixaPorItem + extraPorItem
 
   return {
     comissao,
     taxaTransacao,
     taxaTransporte,
     taxaFixa: taxaFixaPorItem,
+    extraCPF450: extraPorItem * quantidade,
     totalPorItem,
     totalTaxas: totalPorItem * quantidade,
   }
@@ -272,6 +273,7 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
       transactionFee: shopee.taxaTransacao,
       transportFee: shopee.taxaTransporte,
       fixedFee: shopee.taxaFixa,
+      extraCPF450: shopee.extraCPF450,
     }
   } else {
     let taxaPercentualML =
