@@ -17,7 +17,7 @@ export const DEFAULT_SHOPEE_CONFIG: ShopeeConfig = {
   commissionCapPerItem: 100,
 }
 
-const DEFAULT_ML_CONFIG: MercadoLivreConfig = {
+export const DEFAULT_ML_CONFIG: MercadoLivreConfig = {
   fixedFeeTable: [
     { min: 0, max: 12.50, fee: 0 },
     { min: 12.50, max: 29, fee: 6.25 },

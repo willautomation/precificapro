@@ -3,7 +3,7 @@ import {
   CalculationResult,
   SimulationResult,
 } from '@/types'
-import { loadConfig } from './config'
+import { loadConfig, DEFAULT_ML_CONFIG } from './config'
 
 type SellerType = 'CPF' | 'CNPJ'
 
@@ -138,14 +138,15 @@ function calcularTaxasShopeePorPreco(
 }
 
 function calcularPelaTabela(
-  tabela: { min: number; max: number | null; fee: number }[],
-  preco: number
+  tabela: { min: number; max: number | null; fee: number }[] | undefined,
+  precoVenda: number
 ): number {
-  for (const range of tabela) {
+  const t = tabela?.length ? tabela : DEFAULT_ML_CONFIG.fixedFeeTable
+  for (const range of t) {
     if (range.max === null) {
-      if (preco >= range.min) return range.fee
+      if (precoVenda >= range.min) return range.fee
     } else {
-      if (preco >= range.min && preco < range.max) {
+      if (precoVenda >= range.min && precoVenda < range.max) {
         return range.fee
       }
     }
@@ -220,10 +221,10 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
       taxaPercentualML = input.mlSaleFeePercent / 100
     }
 
-    const getTaxaFixa = (preco: number) =>
-      input.mlFixedFee != null
+    const getTaxaFixa = (precoVenda: number) =>
+      (input.mlFixedFee != null && input.mlFixedFee > 0)
         ? input.mlFixedFee
-        : calcularPelaTabela(cfgML.fixedFeeTable, preco)
+        : calcularPelaTabela(cfgML.fixedFeeTable, precoVenda)
 
     if (input.objectiveType === 'lucro') {
       suggestedPrice = (totalCost + input.objectiveValue) / (1 - taxaPercentualML)
@@ -284,7 +285,7 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
       taxaPercentualML = input.mlSaleFeePercent / 100
     }
     const taxaFixaML =
-      input.mlFixedFee != null
+      (input.mlFixedFee != null && input.mlFixedFee > 0)
         ? input.mlFixedFee
         : calcularPelaTabela(cfgML.fixedFeeTable, suggestedPrice)
     const categoryPercent = taxaPercentualML * 100
