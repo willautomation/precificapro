@@ -26,7 +26,8 @@ async function fetchFromListingPrices(
   let premium: number | null = null
   let premiumFixed: number | null = null
   for (const item of arr) {
-    const percent = item.sale_fee_details?.percentage_fee ?? (item.sale_fee_amount != null && price > 0 ? (item.sale_fee_amount / price) * 100 : null)
+    const pct = item.sale_fee_details?.percentage_fee
+    const percent = (typeof pct === 'number') ? pct : (item.sale_fee_amount != null && price > 0 ? (item.sale_fee_amount / price) * 100 : null)
     const fixed = item.listing_fee_details?.fixed_fee ?? item.listing_fee_details?.gross_amount ?? item.listing_fee_amount ?? null
     if (item.listing_type_id === 'gold_special') {
       classico = percent
