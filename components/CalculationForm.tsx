@@ -97,7 +97,8 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
     } else {
       input.mlPlan = mlPlan
       input.mlCategoryId = mlCategoryId
-      input.mlSaleFeePercent = mlPlan === 'premium' ? mlPremiumSaleFee : mlClassicoSaleFee
+      input.mlClassicoSaleFeePercent = mlClassicoSaleFee
+      input.mlPremiumSaleFeePercent = mlPremiumSaleFee
       input.mlFixedFee = mlPlan === 'premium' ? mlPremiumFixedFee : mlClassicoFixedFee
       if (typeof window !== 'undefined') {
         input.mlReputationLevelId =

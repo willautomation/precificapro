@@ -213,10 +213,12 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
     totalFees = shopee.totalTaxas
   } else {
     const hasCategory = !!input.mlCategoryId
-    const categoryPercentClassic = (input as { mlCategory?: { saleFeeClassicPercent?: number } }).mlCategory?.saleFeeClassicPercent ?? (input.mlPlan === 'classico' ? input.mlSaleFeePercent : undefined)
-    const categoryPercentPremium = (input as { mlCategory?: { saleFeePremiumPercent?: number } }).mlCategory?.saleFeePremiumPercent ?? (input.mlPlan === 'premium' ? input.mlSaleFeePercent : undefined)
-    const percentClassico = hasCategory ? (categoryPercentClassic ?? cfgML.defaultCategoryPercentClassico) : cfgML.defaultCategoryPercentClassico
-    const percentPremium = hasCategory ? (categoryPercentPremium ?? cfgML.defaultCategoryPercentPremium) : cfgML.defaultCategoryPercentPremium
+    const percentClassico = hasCategory
+      ? (input.mlClassicoSaleFeePercent ?? cfgML.defaultCategoryPercentClassico)
+      : cfgML.defaultCategoryPercentClassico
+    const percentPremium = hasCategory
+      ? (input.mlPremiumSaleFeePercent ?? cfgML.defaultCategoryPercentPremium)
+      : cfgML.defaultCategoryPercentPremium
     const taxaPercentualML = (input.mlPlan === 'premium' ? percentPremium : percentClassico) / 100
 
     const getTaxaFixa = (precoVenda: number) =>
@@ -276,10 +278,12 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
     }
   } else {
     const hasCategory = !!input.mlCategoryId
-    const categoryPercentClassic = (input as { mlCategory?: { saleFeeClassicPercent?: number } }).mlCategory?.saleFeeClassicPercent ?? (input.mlPlan === 'classico' ? input.mlSaleFeePercent : undefined)
-    const categoryPercentPremium = (input as { mlCategory?: { saleFeePremiumPercent?: number } }).mlCategory?.saleFeePremiumPercent ?? (input.mlPlan === 'premium' ? input.mlSaleFeePercent : undefined)
-    const percentClassico = hasCategory ? (categoryPercentClassic ?? cfgML.defaultCategoryPercentClassico) : cfgML.defaultCategoryPercentClassico
-    const percentPremium = hasCategory ? (categoryPercentPremium ?? cfgML.defaultCategoryPercentPremium) : cfgML.defaultCategoryPercentPremium
+    const percentClassico = hasCategory
+      ? (input.mlClassicoSaleFeePercent ?? cfgML.defaultCategoryPercentClassico)
+      : cfgML.defaultCategoryPercentClassico
+    const percentPremium = hasCategory
+      ? (input.mlPremiumSaleFeePercent ?? cfgML.defaultCategoryPercentPremium)
+      : cfgML.defaultCategoryPercentPremium
     const taxaPercentualML = (input.mlPlan === 'premium' ? percentPremium : percentClassico) / 100
     const taxaFixaML = hasCategory && (input.mlFixedFee != null && input.mlFixedFee > 0)
       ? input.mlFixedFee

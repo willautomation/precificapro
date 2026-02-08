@@ -17,9 +17,11 @@ export interface CalculationInput {
   shopeeCpfHighVolume?: boolean
   // Mercado Livre specific
   mlPlan?: MLPlan
-  /** Taxa percentual de venda da categoria (API ML) */
-  mlSaleFeePercent?: number | null
-  /** Taxa fixa da categoria (API ML) */
+  /** Taxa percentual Clássico (API listing_prices) */
+  mlClassicoSaleFeePercent?: number | null
+  /** Taxa percentual Premium (API listing_prices) */
+  mlPremiumSaleFeePercent?: number | null
+  /** Taxa fixa da categoria (API ML) — Clássico ou Premium conforme plano */
   mlFixedFee?: number | null
   /** Categoria selecionada (API ML) — quando definido, usa taxa real; senão fallback estimado */
   mlCategoryId?: string | null
