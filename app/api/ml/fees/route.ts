@@ -4,10 +4,81 @@ export const dynamic = 'force-dynamic'
 
 const ML_BASE = process.env.ML_BASE_URL || 'https://api.mercadolibre.com'
 
+type ListingPriceItem = {
+  listing_type_id?: string
+  sale_fee_amount?: number
+  sale_fee_details?: { percentage_fee?: number }
+  listing_fee_amount?: number
+  listing_fee_details?: { fixed_fee?: number; gross_amount?: number }
+}
+
+async function fetchFromListingPrices(
+  categoryId: string,
+  price: number
+): Promise<{ classico: number | null; classicoFixed: number | null; premium: number | null; premiumFixed: number | null }> {
+  const url = `${ML_BASE}/sites/MLB/listing_prices?price=${price}&category_id=${categoryId}`
+  const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' })
+  if (!res.ok) return { classico: null, classicoFixed: null, premium: null, premiumFixed: null }
+  const data = (await res.json()) as ListingPriceItem[]
+  const arr = Array.isArray(data) ? data : []
+  let classico: number | null = null
+  let classicoFixed: number | null = null
+  let premium: number | null = null
+  let premiumFixed: number | null = null
+  for (const item of arr) {
+    const percent = item.sale_fee_details?.percentage_fee ?? (item.sale_fee_amount != null && price > 0 ? (item.sale_fee_amount / price) * 100 : null)
+    const fixed = item.listing_fee_details?.fixed_fee ?? item.listing_fee_details?.gross_amount ?? item.listing_fee_amount ?? null
+    if (item.listing_type_id === 'gold_special') {
+      classico = percent
+      classicoFixed = fixed
+    } else if (item.listing_type_id === 'gold_pro') {
+      premium = percent
+      premiumFixed = fixed
+    }
+  }
+  return { classico, classicoFixed, premium, premiumFixed }
+}
+
+async function fetchFromCategories(categoryId: string): Promise<{ classico: number | null; classicoFixed: number | null; premium: number | null; premiumFixed: number | null }> {
+  const res = await fetch(`${ML_BASE}/categories/${categoryId}`, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  })
+  if (!res.ok) return { classico: null, classicoFixed: null, premium: null, premiumFixed: null }
+  const data = await res.json()
+  const settings = data.settings?.listing_types ?? []
+  const pick = (lt: { sale_fees?: { percentage?: number; ratio?: number }[]; listing_fee_details?: { fixed_fee?: number } | number; sale_fee_details?: { fixed_fee?: number } }) => {
+    let saleFee: number | null = null
+    let fixedFee: number | null = null
+    const saleFees = lt?.sale_fees ?? []
+    const fee0 = saleFees[0]
+    if (fee0) {
+      if (typeof fee0.percentage === 'number') saleFee = fee0.percentage
+      else if (typeof fee0.ratio === 'number') saleFee = fee0.ratio * 100
+    }
+    const ld = lt?.listing_fee_details ?? 0
+    if (typeof ld === 'number') fixedFee = ld
+    else if (ld?.fixed_fee != null) fixedFee = ld.fixed_fee
+    if (lt?.sale_fee_details?.fixed_fee != null) fixedFee = lt.sale_fee_details.fixed_fee
+    return { saleFee, fixedFee }
+  }
+  const goldPro = settings.find((t: { id?: string }) => t.id === 'gold_pro')
+  const goldSpecial = settings.find((t: { id?: string }) => t.id === 'gold_special')
+  const c = pick(goldPro ?? goldSpecial ?? settings[0])
+  const s = pick(goldSpecial ?? goldPro ?? settings[0])
+  return {
+    classico: s.saleFee,
+    classicoFixed: s.fixedFee,
+    premium: c.saleFee,
+    premiumFixed: c.fixedFee,
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const categoryId =
-    searchParams.get('categoryId') ?? searchParams.get('category_id')
+  const categoryId = searchParams.get('categoryId') ?? searchParams.get('category_id')
+  const priceParam = searchParams.get('price')
+  const price = priceParam ? parseFloat(priceParam) : 100
 
   if (!categoryId) {
     return NextResponse.json(
@@ -17,53 +88,23 @@ export async function GET(request: Request) {
   }
 
   try {
-    const res = await fetch(`${ML_BASE}/categories/${categoryId}`, {
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    })
-
-    if (!res.ok) {
-      const text = await res.text()
-      console.error('[ml/fees] categories não-ok:', res.status, text)
-      return NextResponse.json(
-        { error: 'Falha ao buscar taxas da categoria' },
-        { status: res.status }
-      )
+    const fromListingPrices = await fetchFromListingPrices(categoryId, price)
+    const hasListingPrices =
+      (fromListingPrices.classico != null || fromListingPrices.premium != null)
+    if (hasListingPrices) {
+      return NextResponse.json({
+        classico: fromListingPrices.classico,
+        premium: fromListingPrices.premium,
+        classico_fixed: fromListingPrices.classicoFixed,
+        premium_fixed: fromListingPrices.premiumFixed,
+      })
     }
-
-    const data = await res.json()
-    const settings = data.settings?.listing_types ?? []
-
-    const pick = (lt: { sale_fees?: { percentage?: number; ratio?: number }[]; listing_fee_details?: { fixed_fee?: number } | number; sale_fee_details?: { fixed_fee?: number } }) => {
-      let sale_fee: number | null = null
-      let listing_type_fee = 0
-      let fixed_fee = 0
-      const saleFees = lt?.sale_fees ?? []
-      const fee0 = saleFees[0]
-      if (fee0) {
-        if (typeof fee0.percentage === 'number') sale_fee = fee0.percentage
-        else if (typeof fee0.ratio === 'number') sale_fee = fee0.ratio * 100
-      }
-      const ld = lt?.listing_fee_details ?? 0
-      if (typeof ld === 'number') listing_type_fee = ld
-      else if (ld?.fixed_fee != null) listing_type_fee = ld.fixed_fee
-      if (lt?.sale_fee_details?.fixed_fee != null) fixed_fee = lt.sale_fee_details.fixed_fee
-      return { sale_fee, listing_type_fee, fixed_fee }
-    }
-
-    const goldPro = settings.find((t: { id?: string }) => t.id === 'gold_pro')
-    const goldSpecial = settings.find((t: { id?: string }) => t.id === 'gold_special')
-    const c = pick(goldPro ?? goldSpecial ?? settings[0])
-    const s = pick(goldSpecial ?? goldPro ?? settings[0])
-
+    const fromCategories = await fetchFromCategories(categoryId)
     return NextResponse.json({
-      sale_fee: c.sale_fee ?? s.sale_fee,
-      listing_type_fee: c.listing_type_fee || s.listing_type_fee,
-      fixed_fee: c.fixed_fee || s.fixed_fee,
-      classico: s.sale_fee,
-      premium: c.sale_fee,
-      classico_fixed: s.fixed_fee,
-      premium_fixed: c.fixed_fee,
+      classico: fromCategories.classico,
+      premium: fromCategories.premium,
+      classico_fixed: fromCategories.classicoFixed,
+      premium_fixed: fromCategories.premiumFixed,
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)

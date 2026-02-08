@@ -5,6 +5,7 @@ import React, { useState } from 'react'
 interface CategoryOption {
   id: string
   name: string
+  breadcrumb: string
 }
 
 interface CategorySelectorProps {
@@ -16,6 +17,19 @@ interface CategorySelectorProps {
     premiumSaleFee: number | null,
     premiumFixedFee: number | null
   ) => void
+}
+
+const ML_API = 'https://api.mercadolibre.com'
+
+async function fetchBreadcrumb(categoryId: string): Promise<string> {
+  const res = await fetch(`${ML_API}/categories/${categoryId}`, {
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) return categoryId
+  const data = await res.json()
+  const path = data.path_from_root as { id: string; name: string }[] | undefined
+  if (!Array.isArray(path) || path.length === 0) return data.name ?? categoryId
+  return path.map((p: { name: string }) => p.name).join(' > ')
 }
 
 export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) {
@@ -39,17 +53,28 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
     onCategoryResolved(null, null, null, null, null, null)
     try {
       const res = await fetch(
-        `https://api.mercadolibre.com/sites/MLB/domain_discovery/search?q=${encodeURIComponent(q)}`
+        `${ML_API}/sites/MLB/domain_discovery/search?q=${encodeURIComponent(q)}`
       )
       if (!res.ok) throw new Error('Falha na busca')
       const data = await res.json()
       const arr = Array.isArray(data) ? data : []
-      const list: CategoryOption[] = arr
-        .filter((x: { category_id?: string }) => x?.category_id)
-        .map((x: { category_id: string; category_name?: string }) => ({
-          id: x.category_id,
-          name: x.category_name ?? x.category_id,
-        }))
+      const byId = new Map<string, { id: string; name: string }>()
+      for (const x of arr as { category_id?: string; category_name?: string }[]) {
+        if (!x?.category_id) continue
+        if (!byId.has(x.category_id)) {
+          byId.set(x.category_id, {
+            id: x.category_id,
+            name: x.category_name ?? x.category_id,
+          })
+        }
+      }
+      const unique = Array.from(byId.values())
+      const list: CategoryOption[] = await Promise.all(
+        unique.map(async (cat) => {
+          const breadcrumb = await fetchBreadcrumb(cat.id)
+          return { id: cat.id, name: cat.name, breadcrumb }
+        })
+      )
       setOptions(list)
       if (list.length === 0) setError('Nenhuma categoria encontrada.')
     } catch {
@@ -63,7 +88,7 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
   const handleSelect = async (cat: CategoryOption) => {
     setResolvedCategory(cat)
     setOptions([])
-    setSearchText(cat.name)
+    setSearchText(cat.breadcrumb)
     setError(null)
     try {
       const feeRes = await fetch(
@@ -113,7 +138,7 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ex: celular samsung"
+          placeholder="Ex: camiseta masculina, tênis, calça jeans"
           className="input-field flex-1"
           disabled={loading}
         />
@@ -146,7 +171,7 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
                 onClick={() => handleSelect(opt)}
                 className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 text-gray-700"
               >
-                {opt.name}
+                {opt.breadcrumb}
               </button>
             </li>
           ))}
@@ -154,7 +179,7 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
       )}
       {resolvedCategory && !loading && options.length === 0 && (
         <p className="text-sm text-green-600">
-          ✓ {resolvedCategory.name}
+          ✓ {resolvedCategory.breadcrumb}
         </p>
       )}
     </div>
