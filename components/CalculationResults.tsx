@@ -88,12 +88,21 @@ export function CalculationResults({ result }: CalculationResultsProps) {
               <span className="font-semibold">{formatCurrency(result.breakdown.otherCosts)}</span>
             </div>
             {result.breakdown.categoryPercent !== undefined && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">Percentual da Categoria:</span>
-                <span className="font-semibold text-gray-700">
-                  {result.breakdown.categoryPercent}%
-                </span>
-              </div>
+              <>
+                {result.breakdown.mlCategoryEstimate && (
+                  <p className="text-sm text-amber-600 mb-2">
+                    Taxa estimada. Selecione a categoria para precisão.
+                  </p>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-600">
+                    {result.breakdown.mlCategoryEstimate ? 'Percentual Estimado:' : 'Percentual da Categoria:'}
+                  </span>
+                  <span className="font-semibold text-gray-700">
+                    {result.breakdown.categoryPercent}%
+                  </span>
+                </div>
+              </>
             )}
             <div className="flex justify-between">
               <span className="text-gray-600">Comissão:</span>

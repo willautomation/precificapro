@@ -21,6 +21,8 @@ export interface CalculationInput {
   mlSaleFeePercent?: number | null
   /** Taxa fixa da categoria (API ML) */
   mlFixedFee?: number | null
+  /** Categoria selecionada (API ML) — quando definido, usa taxa real; senão fallback estimado */
+  mlCategoryId?: string | null
   /** level_id ou power_seller_status da API, para reputação */
   mlReputationLevelId?: string | null
 }
@@ -40,6 +42,8 @@ export interface CalculationResult {
     fixedFee: number
     extraCPF450?: number
     categoryPercent?: number
+    /** true = taxa vinda do fallback (12%/17%), não da categoria */
+    mlCategoryEstimate?: boolean
   }
 }
 

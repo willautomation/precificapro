@@ -27,6 +27,7 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
   
   // Mercado Livre specific
   const [mlPlan, setMlPlan] = useState<MLPlan>('classico')
+  const [mlCategoryId, setMlCategoryId] = useState<string | null>(null)
   const [mlClassicoSaleFee, setMlClassicoSaleFee] = useState<number | null>(null)
   const [mlClassicoFixedFee, setMlClassicoFixedFee] = useState<number | null>(null)
   const [mlPremiumSaleFee, setMlPremiumSaleFee] = useState<number | null>(null)
@@ -34,6 +35,7 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
 
   useEffect(() => {
     if (platform !== 'MercadoLivre') {
+      setMlCategoryId(null)
       setMlClassicoSaleFee(null)
       setMlClassicoFixedFee(null)
       setMlPremiumSaleFee(null)
@@ -42,13 +44,14 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
   }, [platform])
 
   const handleCategoryResolved = (
-    _categoryId: string | null,
+    categoryId: string | null,
     _categoryName: string | null,
     classicoSaleFee: number | null,
     classicoFixedFee: number | null,
     premiumSaleFee: number | null,
     premiumFixedFee: number | null
   ) => {
+    setMlCategoryId(categoryId)
     setMlClassicoSaleFee(classicoSaleFee)
     setMlClassicoFixedFee(classicoFixedFee)
     setMlPremiumSaleFee(premiumSaleFee)
@@ -93,6 +96,7 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
       input.shopeeCpfHighVolume = sellerType === 'CPF' ? cpfHighVolume : false
     } else {
       input.mlPlan = mlPlan
+      input.mlCategoryId = mlCategoryId
       input.mlSaleFeePercent = mlPlan === 'premium' ? mlPremiumSaleFee : mlClassicoSaleFee
       input.mlFixedFee = mlPlan === 'premium' ? mlPremiumFixedFee : mlClassicoFixedFee
       if (typeof window !== 'undefined') {
