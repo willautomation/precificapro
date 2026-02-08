@@ -47,6 +47,14 @@ export interface CalculationResult {
     /** true = taxa vinda do fallback (12%/17%), não da categoria */
     mlCategoryEstimate?: boolean
   }
+  /** DEBUG ML - temporário */
+  debug?: {
+    mlCategoryId: string | null | undefined
+    mlCategoryEstimate: boolean
+    classicPercentFromApi: number | null | undefined
+    premiumPercentFromApi: number | null | undefined
+    percentUsed: number
+  }
 }
 
 export interface SimulationResult {

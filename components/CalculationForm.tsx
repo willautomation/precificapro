@@ -45,12 +45,16 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
 
   const handleCategoryResolved = (
     categoryId: string | null,
-    _categoryName: string | null,
+    categoryName: string | null,
     classicoSaleFee: number | null,
     classicoFixedFee: number | null,
     premiumSaleFee: number | null,
-    premiumFixedFee: number | null
+    premiumFixedFee: number | null,
+    breadcrumb?: string | null
   ) => {
+    if (typeof window !== 'undefined') {
+      console.log('ML CATEGORY RESOLVED', { id: categoryId, breadcrumb: breadcrumb ?? categoryName })
+    }
     setMlCategoryId(categoryId)
     setMlClassicoSaleFee(classicoSaleFee)
     setMlClassicoFixedFee(classicoFixedFee)
@@ -106,6 +110,9 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
       }
     }
 
+    if (typeof window !== 'undefined') {
+      console.log('SUBMIT INPUT', input)
+    }
     onSubmit(input)
   }
 

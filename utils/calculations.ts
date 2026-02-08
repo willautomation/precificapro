@@ -301,13 +301,33 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
     }
   }
 
-  return {
+  const ret: CalculationResult = {
     suggestedPrice,
     profitPerSale,
     totalFees,
     totalCost,
     breakdown,
   }
+  if (input.platform === 'MercadoLivre') {
+    const hasCategory = !!input.mlCategoryId
+    const pClassico = hasCategory
+      ? (input.mlClassicoSaleFeePercent ?? cfgML.defaultCategoryPercentClassico)
+      : cfgML.defaultCategoryPercentClassico
+    const pPremium = hasCategory
+      ? (input.mlPremiumSaleFeePercent ?? cfgML.defaultCategoryPercentPremium)
+      : cfgML.defaultCategoryPercentPremium
+    ret.debug = {
+      mlCategoryId: input.mlCategoryId,
+      mlCategoryEstimate: !hasCategory,
+      classicPercentFromApi: input.mlClassicoSaleFeePercent,
+      premiumPercentFromApi: input.mlPremiumSaleFeePercent,
+      percentUsed: input.mlPlan === 'premium' ? pPremium : pClassico,
+    }
+    if (typeof window !== 'undefined') {
+      console.log('ML CALC DEBUG', ret.debug)
+    }
+  }
+  return ret
 }
 
 export function simulateSales(

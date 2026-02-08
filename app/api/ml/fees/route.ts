@@ -12,32 +12,72 @@ type ListingPriceItem = {
   listing_fee_details?: { fixed_fee?: number; gross_amount?: number }
 }
 
+type ListingPricesResult = {
+  classico: number | null
+  classicoFixed: number | null
+  premium: number | null
+  premiumFixed: number | null
+  debug: {
+    usedPrice: number
+    categoryId: string
+    listingTypeIdClassic: string | null
+    listingTypeIdPremium: string | null
+    classicPercentFromApi: number | null
+    premiumPercentFromApi: number | null
+    classicFieldUsed: 'percentage_fee' | 'sale_fee_amount_calc' | null
+    premiumFieldUsed: 'percentage_fee' | 'sale_fee_amount_calc' | null
+    rawItems: Array<{ listing_type_id?: string; sale_fee_amount?: number; sale_fee_details?: unknown; listing_fee_amount?: number; listing_fee_details?: unknown }>
+    fallbackReason?: string
+  }
+}
+
 async function fetchFromListingPrices(
   categoryId: string,
   price: number
-): Promise<{ classico: number | null; classicoFixed: number | null; premium: number | null; premiumFixed: number | null }> {
+): Promise<ListingPricesResult> {
   const url = `${ML_BASE}/sites/MLB/listing_prices?price=${price}&category_id=${categoryId}`
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' })
-  if (!res.ok) return { classico: null, classicoFixed: null, premium: null, premiumFixed: null }
-  const data = (await res.json()) as ListingPriceItem[]
-  const arr = Array.isArray(data) ? data : []
+  console.log('[ml/fees] REQUEST', { category_id: categoryId, price, listing_prices_url: url })
   let classico: number | null = null
   let classicoFixed: number | null = null
   let premium: number | null = null
   let premiumFixed: number | null = null
-  for (const item of arr) {
-    const pct = item.sale_fee_details?.percentage_fee
-    const percent = (typeof pct === 'number') ? pct : (item.sale_fee_amount != null && price > 0 ? (item.sale_fee_amount / price) * 100 : null)
-    const fixed = item.listing_fee_details?.fixed_fee ?? item.listing_fee_details?.gross_amount ?? item.listing_fee_amount ?? null
-    if (item.listing_type_id === 'gold_special') {
-      classico = percent
-      classicoFixed = fixed
-    } else if (item.listing_type_id === 'gold_pro') {
-      premium = percent
-      premiumFixed = fixed
+  let listingTypeIdClassic: string | null = null
+  let listingTypeIdPremium: string | null = null
+  let classicFieldUsed: 'percentage_fee' | 'sale_fee_amount_calc' | null = null
+  let premiumFieldUsed: 'percentage_fee' | 'sale_fee_amount_calc' | null = null
+  const rawItems: Array<{ listing_type_id?: string; sale_fee_amount?: number; sale_fee_details?: unknown; listing_fee_amount?: number; listing_fee_details?: unknown }> = []
+  try {
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' })
+    if (!res.ok) {
+      console.log('[ml/fees] listing_prices NOT OK', res.status)
+      return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: null, premiumPercentFromApi: null, classicFieldUsed: null, premiumFieldUsed: null, rawItems, fallbackReason: `ML_API_ERROR status=${res.status}` } }
     }
+    const data = (await res.json()) as ListingPriceItem[]
+    const arr = Array.isArray(data) ? data : []
+    console.log('[ml/fees] listing_prices RESPONSE', arr.map((i) => ({ listing_type_id: i.listing_type_id, sale_fee_amount: i.sale_fee_amount, sale_fee_details: i.sale_fee_details, listing_fee_amount: i.listing_fee_amount, listing_fee_details: i.listing_fee_details })))
+    for (const item of arr) {
+      rawItems.push({ listing_type_id: item.listing_type_id, sale_fee_amount: item.sale_fee_amount, sale_fee_details: item.sale_fee_details, listing_fee_amount: item.listing_fee_amount, listing_fee_details: item.listing_fee_details })
+      const pct = item.sale_fee_details?.percentage_fee
+      const usedPercentageFee = typeof pct === 'number'
+      const percent = usedPercentageFee ? pct : (item.sale_fee_amount != null && price > 0 ? (item.sale_fee_amount / price) * 100 : null)
+      const fixed = item.listing_fee_details?.fixed_fee ?? item.listing_fee_details?.gross_amount ?? item.listing_fee_amount ?? null
+      if (item.listing_type_id === 'gold_special') {
+        classico = percent
+        classicoFixed = fixed
+        listingTypeIdClassic = 'gold_special'
+        classicFieldUsed = usedPercentageFee ? 'percentage_fee' : 'sale_fee_amount_calc'
+      } else if (item.listing_type_id === 'gold_pro') {
+        premium = percent
+        premiumFixed = fixed
+        listingTypeIdPremium = 'gold_pro'
+        premiumFieldUsed = usedPercentageFee ? 'percentage_fee' : 'sale_fee_amount_calc'
+      }
+    }
+    return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: classico, premiumPercentFromApi: premium, classicFieldUsed, premiumFieldUsed, rawItems } }
+  } catch (e) {
+    console.log('[ml/fees] listing_prices ERROR', e)
+    return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: null, premiumPercentFromApi: null, classicFieldUsed: null, premiumFieldUsed: null, rawItems, fallbackReason: 'ML_API_ERROR' } }
   }
-  return { classico, classicoFixed, premium, premiumFixed }
 }
 
 async function fetchFromCategories(categoryId: string): Promise<{ classico: number | null; classicoFixed: number | null; premium: number | null; premiumFixed: number | null }> {
@@ -98,6 +138,7 @@ export async function GET(request: Request) {
         premium: fromListingPrices.premium,
         classico_fixed: fromListingPrices.classicoFixed,
         premium_fixed: fromListingPrices.premiumFixed,
+        debug: fromListingPrices.debug,
       })
     }
     const fromCategories = await fetchFromCategories(categoryId)
@@ -106,10 +147,14 @@ export async function GET(request: Request) {
       premium: fromCategories.premium,
       classico_fixed: fromCategories.classicoFixed,
       premium_fixed: fromCategories.premiumFixed,
+      debug: { ...fromListingPrices.debug, fallbackReason: fromListingPrices.debug.fallbackReason ?? 'LISTING_PRICES_EMPTY_FELLBACK_TO_CATEGORIES' },
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[ml/fees] Erro:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({
+      error: message,
+      debug: { usedPrice: price, categoryId: categoryId ?? '', listingTypeIdClassic: null, listingTypeIdPremium: null, classicPercentFromApi: null, premiumPercentFromApi: null, classicFieldUsed: null, premiumFieldUsed: null, rawItems: [], fallbackReason: 'ML_API_ERROR' },
+    }, { status: 500 })
   }
 }

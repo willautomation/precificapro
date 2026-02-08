@@ -144,6 +144,16 @@ export function CalculationResults({ result }: CalculationResultsProps) {
               <span>Lucro Líquido:</span>
               <span className="text-green-600">{formatCurrency(result.profitPerSale)}</span>
             </div>
+            {result.debug && (
+              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs font-mono space-y-1">
+                <p className="font-bold text-amber-800">DEBUG ML</p>
+                <p>mlCategoryId: {String(result.debug.mlCategoryId ?? '(vazio)')}</p>
+                <p>mlCategoryEstimate (fallback 12/17): {String(result.debug.mlCategoryEstimate)}</p>
+                <p>classicPercentFromApi: {result.debug.classicPercentFromApi ?? '(null)'}</p>
+                <p>premiumPercentFromApi: {result.debug.premiumPercentFromApi ?? '(null)'}</p>
+                <p>percentUsed (exibido como Percentual): {result.debug.percentUsed}%</p>
+              </div>
+            )}
           </div>
         )}
       </div>

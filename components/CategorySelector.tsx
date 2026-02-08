@@ -15,7 +15,8 @@ interface CategorySelectorProps {
     classicoSaleFee: number | null,
     classicoFixedFee: number | null,
     premiumSaleFee: number | null,
-    premiumFixedFee: number | null
+    premiumFixedFee: number | null,
+    breadcrumb?: string | null
   ) => void
 }
 
@@ -96,19 +97,26 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
       )
       if (feeRes.ok) {
         const fees = await feeRes.json()
+        if (typeof window !== 'undefined') {
+          console.log('ML FEES RESPONSE', fees)
+        }
         onCategoryResolved(
           cat.id,
           cat.name,
           fees.classico ?? null,
           fees.classico_fixed ?? null,
           fees.premium ?? null,
-          fees.premium_fixed ?? null
+          fees.premium_fixed ?? null,
+          cat.breadcrumb ?? null
         )
       } else {
-        onCategoryResolved(cat.id, cat.name, null, null, null, null)
+        onCategoryResolved(cat.id, cat.name, null, null, null, null, cat.breadcrumb ?? null)
       }
-    } catch {
-      onCategoryResolved(cat.id, cat.name, null, null, null, null)
+    } catch (e) {
+      if (typeof window !== 'undefined') {
+        console.log('ML FEES ERROR', e)
+      }
+      onCategoryResolved(cat.id, cat.name, null, null, null, null, cat.breadcrumb ?? null)
     }
   }
 
@@ -117,7 +125,7 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
     setOptions([])
     setResolvedCategory(null)
     setError(null)
-    onCategoryResolved(null, null, null, null, null, null)
+    onCategoryResolved(null, null, null, null, null, null, null)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
