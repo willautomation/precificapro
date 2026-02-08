@@ -4,12 +4,26 @@ export const dynamic = 'force-dynamic'
 
 const ML_BASE = process.env.ML_BASE_URL || 'https://api.mercadolibre.com'
 
+type SaleFeeDetailItem = { type?: string; percentage_fee?: number }
 type ListingPriceItem = {
   listing_type_id?: string
   sale_fee_amount?: number
-  sale_fee_details?: { percentage_fee?: number }
+  sale_fee_details?: SaleFeeDetailItem[]
   listing_fee_amount?: number
   listing_fee_details?: { fixed_fee?: number; gross_amount?: number }
+}
+
+function getPercentFromSaleFeeDetails(saleFeeDetails: SaleFeeDetailItem[] | undefined, saleFeeAmount: number | undefined, price: number): { percent: number | null; used: 'percentage_fee' | 'sale_fee_amount_calc' } {
+  const details = Array.isArray(saleFeeDetails) ? saleFeeDetails : []
+  const feeDetail = details.find((d: SaleFeeDetailItem) => d.type === 'percentage_fee')
+  const pct = feeDetail?.percentage_fee
+  if (typeof pct === 'number') {
+    return { percent: pct, used: 'percentage_fee' }
+  }
+  return {
+    percent: saleFeeAmount != null && price > 0 ? (saleFeeAmount / price) * 100 : null,
+    used: 'sale_fee_amount_calc',
+  }
 }
 
 type ListingPricesResult = {
@@ -57,20 +71,19 @@ async function fetchFromListingPrices(
     console.log('[ml/fees] listing_prices RESPONSE', arr.map((i) => ({ listing_type_id: i.listing_type_id, sale_fee_amount: i.sale_fee_amount, sale_fee_details: i.sale_fee_details, listing_fee_amount: i.listing_fee_amount, listing_fee_details: i.listing_fee_details })))
     for (const item of arr) {
       rawItems.push({ listing_type_id: item.listing_type_id, sale_fee_amount: item.sale_fee_amount, sale_fee_details: item.sale_fee_details, listing_fee_amount: item.listing_fee_amount, listing_fee_details: item.listing_fee_details })
-      const pct = item.sale_fee_details?.percentage_fee
-      const usedPercentageFee = typeof pct === 'number'
-      const percent = usedPercentageFee ? pct : (item.sale_fee_amount != null && price > 0 ? (item.sale_fee_amount / price) * 100 : null)
-      const fixed = item.listing_fee_details?.fixed_fee ?? item.listing_fee_details?.gross_amount ?? item.listing_fee_amount ?? null
+      const { percent, used } = getPercentFromSaleFeeDetails(item.sale_fee_details as SaleFeeDetailItem[] | undefined, item.sale_fee_amount, price)
+      const ld = item.listing_fee_details as { fixed_fee?: number; gross_amount?: number } | undefined
+      const fixed = ld?.fixed_fee ?? ld?.gross_amount ?? item.listing_fee_amount ?? null
       if (item.listing_type_id === 'gold_special') {
         classico = percent
         classicoFixed = fixed
         listingTypeIdClassic = 'gold_special'
-        classicFieldUsed = usedPercentageFee ? 'percentage_fee' : 'sale_fee_amount_calc'
+        classicFieldUsed = used
       } else if (item.listing_type_id === 'gold_pro') {
         premium = percent
         premiumFixed = fixed
         listingTypeIdPremium = 'gold_pro'
-        premiumFieldUsed = usedPercentageFee ? 'percentage_fee' : 'sale_fee_amount_calc'
+        premiumFieldUsed = used
       }
     }
     return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: classico, premiumPercentFromApi: premium, classicFieldUsed, premiumFieldUsed, rawItems } }
