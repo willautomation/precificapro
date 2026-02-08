@@ -90,7 +90,7 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
 
     if (platform === 'Shopee') {
       input.shopeeFreeShippingProgram = freeShipping
-      input.shopeeCpfHighVolume = cpfHighVolume
+      input.shopeeCpfHighVolume = sellerType === 'CPF' ? cpfHighVolume : false
     } else {
       input.mlPlan = mlPlan
       input.mlSaleFeePercent = mlPlan === 'premium' ? mlPremiumSaleFee : mlClassicoSaleFee
@@ -117,7 +117,11 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
             { value: 'CNPJ', label: 'CNPJ' },
           ]}
           value={sellerType}
-          onChange={(value) => setSellerType(value as SellerType)}
+          onChange={(value) => {
+            const v = value as SellerType
+            setSellerType(v)
+            if (v === 'CNPJ') setCpfHighVolume(false)
+          }}
         />
       </div>
 

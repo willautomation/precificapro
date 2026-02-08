@@ -169,7 +169,7 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
 
   if (input.platform === 'Shopee') {
     const participaFreteGratis = !!input.shopeeFreeShippingProgram
-    const cpfHighVolume = !!input.shopeeCpfHighVolume
+    const cpfHighVolume = input.sellerType === 'CPF' ? !!input.shopeeCpfHighVolume : false
 
     const getTaxas = (preco: number) =>
       calcularTaxasShopeePorPreco(
@@ -263,7 +263,7 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
       quantidade: input.quantity,
       sellerType: input.sellerType,
       participaFreteGratis: !!input.shopeeFreeShippingProgram,
-      cpfHighVolume: !!input.shopeeCpfHighVolume,
+      cpfHighVolume: input.sellerType === 'CPF' ? !!input.shopeeCpfHighVolume : false,
     })
     breakdown = {
       productCost: input.productCost,
@@ -273,7 +273,7 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
       transactionFee: shopee.taxaTransacao,
       transportFee: shopee.taxaTransporte,
       fixedFee: shopee.taxaFixa,
-      extraCPF450: shopee.extraCPF450,
+      extraCPF450: input.sellerType === 'CPF' ? shopee.extraCPF450 : undefined,
     }
   } else {
     let taxaPercentualML =
