@@ -1,37 +1,61 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
-export const dynamic = 'force-dynamic'
+function base64url(input: Buffer) {
+  return input
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
 
-export async function GET() {
-  const clientId = process.env.ML_CLIENT_ID
-  const redirectUri = process.env.ML_REDIRECT_URI ?? 'https://precificapro-pi.vercel.app/api/ml/callback'
-  
-  if (!clientId) {
-    return NextResponse.json({ error: 'Faltando ML_CLIENT_ID' }, { status: 500 })
+function sha256Base64Url(verifier: string) {
+  const hash = crypto.createHash("sha256").update(verifier).digest();
+  return base64url(hash);
+}
+
+function randomString(len = 32) {
+  const bytes = crypto.randomBytes(len);
+  return base64url(bytes);
+}
+
+export async function GET(req: NextRequest) {
+  const ML_CLIENT_ID = process.env.ML_CLIENT_ID;
+  const ML_REDIRECT_URI = process.env.ML_REDIRECT_URI;
+
+  if (!ML_CLIENT_ID || !ML_REDIRECT_URI) {
+    return new NextResponse("Missing ML_CLIENT_ID or ML_REDIRECT_URI", { status: 500 });
   }
 
-  console.log('[ML auth] redirect_uri usado:', redirectUri)
+  const code_verifier = randomString(64);
+  const code_challenge = sha256Base64Url(code_verifier);
+  const state = randomString(24);
 
-  // Gerar state para segurança (CSRF protection)
-  const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-  
-  // Construir URL de autorização (redirect_uri URL-encoded)
-  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
-  
-  // Salvar state em cookie para validação no callback
-  const response = NextResponse.redirect(authUrl)
-  
-  // Salvar state em cookie httpOnly
-  // Em DEV (NODE_ENV != "production") usar secure=false
-  const isProduction = process.env.NODE_ENV === 'production'
-  
-  response.cookies.set('ml_oauth_state', state, {
+  const authUrl = new URL("https://auth.mercadolivre.com.br/authorization");
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", ML_CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", ML_REDIRECT_URI);
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("code_challenge", code_challenge);
+  authUrl.searchParams.set("code_challenge_method", "S256");
+
+  const res = NextResponse.redirect(authUrl.toString(), 307);
+
+  res.cookies.set("ml_oauth_state", state, {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 600, // 10 minutos
-  })
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 10,
+  });
 
-  return response
+  res.cookies.set("ml_code_verifier", code_verifier, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 10,
+  });
+
+  return res;
 }
