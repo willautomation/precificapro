@@ -72,14 +72,15 @@ async function fetchFromListingPrices(
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'PrecificaPro/1.0',
+        'User-Agent': 'PrecificaPRO/1.0',
         'Accept': 'application/json',
       },
       cache: 'no-store',
     })
     if (!res.ok) {
-      console.log('[ml/fees] listing_prices NOT OK', res.status)
-      return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: null, premiumPercentFromApi: null, classicFieldUsed: null, premiumFieldUsed: null, rawItems, fallbackReason: `ML_API_ERROR status=${res.status}` } }
+      const errText = await res.text()
+      const debugBase = { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: null, premiumPercentFromApi: null, classicFieldUsed: null, premiumFieldUsed: null, rawItems, fallbackReason: `ML_API_ERROR status=${res.status}` }
+      return { classico, classicoFixed, premium, premiumFixed, debug: { ...debugBase, httpStatus: res.status, httpStatusText: res.statusText, errorBody: errText.slice(0, 500) } }
     }
     const data = (await res.json()) as ListingPriceItem[]
     const arr = Array.isArray(data) ? data : []
@@ -113,7 +114,7 @@ async function fetchFromListingPrices(
     return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: classico, premiumPercentFromApi: premium, classicFieldUsed, premiumFieldUsed, rawItems } }
   } catch (e) {
     console.log('[ml/fees] listing_prices ERROR', e)
-    return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: null, premiumPercentFromApi: null, classicFieldUsed: null, premiumFieldUsed: null, rawItems, fallbackReason: 'ML_API_ERROR' } }
+    return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: null, premiumPercentFromApi: null, classicFieldUsed: null, premiumFieldUsed: null, rawItems, fallbackReason: 'ML_API_ERROR', exceptionMessage: String(e) } }
   }
 }
 
