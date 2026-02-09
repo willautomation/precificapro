@@ -43,29 +43,8 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
     }
   }, [platform])
 
-  const handleCategoryResolved = async (
-    categoryId: string | null,
-    categoryName: string | null,
-    _classicoSaleFee: number | null,
-    _classicoFixedFee: number | null,
-    _premiumSaleFee: number | null,
-    _premiumFixedFee: number | null,
-    breadcrumb?: string | null
-  ) => {
-    if (typeof window !== 'undefined') {
-      console.log('ML CATEGORY RESOLVED', { id: categoryId, breadcrumb: breadcrumb ?? categoryName })
-    }
-    setMlCategoryId(categoryId)
-    if (!categoryId) {
-      setMlClassicoSaleFee(null)
-      setMlClassicoFixedFee(null)
-      setMlPremiumSaleFee(null)
-      setMlPremiumFixedFee(null)
-      return
-    }
+  const fetchMlFees = async (categoryId: string, price: number) => {
     try {
-      const p = parseFloat(productCost)
-      const price = p > 0 ? p : 1
       const res = await fetch(`/api/ml/fees?category_id=${encodeURIComponent(categoryId)}&price=${encodeURIComponent(price)}`)
       const data = await res.json()
       if (res.ok) {
@@ -89,6 +68,44 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
       setMlPremiumFixedFee(null)
     }
   }
+
+  const handleCategoryResolved = async (
+    categoryId: string | null,
+    categoryName: string | null,
+    _classicoSaleFee: number | null,
+    _classicoFixedFee: number | null,
+    _premiumSaleFee: number | null,
+    _premiumFixedFee: number | null,
+    breadcrumb?: string | null
+  ) => {
+    if (typeof window !== 'undefined') {
+      console.log('ML CATEGORY RESOLVED', { id: categoryId, breadcrumb: breadcrumb ?? categoryName })
+    }
+    setMlCategoryId(categoryId)
+    if (!categoryId) {
+      setMlClassicoSaleFee(null)
+      setMlClassicoFixedFee(null)
+      setMlPremiumSaleFee(null)
+      setMlPremiumFixedFee(null)
+      return
+    }
+    const p = parseFloat(productCost)
+    if (!(p > 0)) {
+      setMlClassicoSaleFee(null)
+      setMlClassicoFixedFee(null)
+      setMlPremiumSaleFee(null)
+      setMlPremiumFixedFee(null)
+      return
+    }
+    await fetchMlFees(categoryId, p)
+  }
+
+  useEffect(() => {
+    if (platform !== 'MercadoLivre' || !mlCategoryId) return
+    const p = parseFloat(productCost)
+    if (!(p > 0)) return
+    fetchMlFees(mlCategoryId, p)
+  }, [platform, mlCategoryId, productCost])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
