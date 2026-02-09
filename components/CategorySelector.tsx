@@ -86,38 +86,12 @@ export function CategorySelector({ onCategoryResolved }: CategorySelectorProps) 
     }
   }
 
-  const handleSelect = async (cat: CategoryOption) => {
+  const handleSelect = (cat: CategoryOption) => {
     setResolvedCategory(cat)
     setOptions([])
     setSearchText(cat.breadcrumb)
     setError(null)
-    try {
-      const feeRes = await fetch(
-        `/api/ml/fees?category_id=${encodeURIComponent(cat.id)}`
-      )
-      if (feeRes.ok) {
-        const fees = await feeRes.json()
-        if (typeof window !== 'undefined') {
-          console.log('ML FEES RESPONSE', fees)
-        }
-        onCategoryResolved(
-          cat.id,
-          cat.name,
-          fees.classico ?? null,
-          fees.classico_fixed ?? null,
-          fees.premium ?? null,
-          fees.premium_fixed ?? null,
-          cat.breadcrumb ?? null
-        )
-      } else {
-        onCategoryResolved(cat.id, cat.name, null, null, null, null, cat.breadcrumb ?? null)
-      }
-    } catch (e) {
-      if (typeof window !== 'undefined') {
-        console.log('ML FEES ERROR', e)
-      }
-      onCategoryResolved(cat.id, cat.name, null, null, null, null, cat.breadcrumb ?? null)
-    }
+    onCategoryResolved(cat.id, cat.name, null, null, null, null, cat.breadcrumb ?? null)
   }
 
   const handleClear = () => {
