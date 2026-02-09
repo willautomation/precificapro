@@ -4,14 +4,10 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const clientId = process.env.ML_CLIENT_ID
-  const redirectUri = process.env.ML_REDIRECT_URI
+  const redirectUri = process.env.ML_REDIRECT_URI ?? 'https://precificapro-pi.vercel.app/api/ml/callback'
 
   if (!clientId) {
     return NextResponse.json({ error: 'Faltando ML_CLIENT_ID' }, { status: 500 })
-  }
-
-  if (!redirectUri) {
-    return NextResponse.json({ error: 'Faltando ML_REDIRECT_URI' }, { status: 500 })
   }
 
   console.log('[ML login] redirect_uri usado:', redirectUri)

@@ -3,10 +3,13 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
+const DEFAULT_REDIRECT_URI = 'https://precificapro-pi.vercel.app/api/ml/callback'
+
 interface TokenResponse {
   access_token?: string
   expires_in?: number
   refresh_token?: string
+  user_id?: number
 }
 
 export async function GET(req: Request) {
@@ -33,42 +36,51 @@ export async function GET(req: Request) {
     return redirect('/?ml_error=invalid_state')
   }
 
-  const clientId = process.env.ML_CLIENT_ID!
-  const clientSecret = process.env.ML_CLIENT_SECRET!
-  const redirectUri = process.env.ML_REDIRECT_URI!
+  const clientId = process.env.ML_CLIENT_ID
+  const clientSecret = process.env.ML_CLIENT_SECRET
+  const redirectUri = process.env.ML_REDIRECT_URI ?? DEFAULT_REDIRECT_URI
+
+  if (!clientId || !clientSecret) {
+    console.error('[ML CALLBACK] Faltando ML_CLIENT_ID ou ML_CLIENT_SECRET')
+    return redirect('/?ml_error=token_exchange_failed')
+  }
 
   try {
-    const tokenResponse = await fetch(
-      'https://api.mercadolibre.com/oauth/token',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
-        },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          client_id: clientId,
-          client_secret: clientSecret,
-          code,
-          redirect_uri: redirectUri,
-        }),
-      }
-    )
+    const tokenResponse = await fetch('https://api.mercadolibre.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
+    })
 
-    const tokenData = (await tokenResponse.json()) as TokenResponse
+    const rawBody = await tokenResponse.text()
+    let tokenData: TokenResponse & Record<string, unknown> = {}
+    try {
+      tokenData = JSON.parse(rawBody) as TokenResponse & Record<string, unknown>
+    } catch {
+      // body não é JSON
+    }
 
-    if (!tokenData.access_token) {
-      console.error('[ML CALLBACK] Falha token:', {
-        status: tokenResponse.status,
-        body: tokenData,
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      const logBody = rawBody.length > 500 ? rawBody.slice(0, 500) + '...' : rawBody
+      console.error('[ML CALLBACK] token exchange falhou:', {
+        httpStatus: tokenResponse.status,
+        httpStatusText: tokenResponse.statusText,
+        errorBody: logBody,
+        redirectUriUsed: redirectUri,
       })
       return redirect('/?ml_error=token_exchange_failed')
     }
 
-    const res = NextResponse.redirect(
-      new URL('/?ml_auth=success', req.url)
-    )
+    const res = NextResponse.redirect(new URL('/?ml_auth=success', req.url))
 
     res.cookies.set('ml_access_token', tokenData.access_token, {
       httpOnly: true,
@@ -88,11 +100,21 @@ export async function GET(req: Request) {
       })
     }
 
+    if (tokenData.user_id != null) {
+      res.cookies.set('ml_user_id', String(tokenData.user_id), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+      })
+    }
+
     res.cookies.delete('ml_oauth_state')
 
     return res
   } catch (err) {
-    console.error('[ML CALLBACK] erro geral:', err)
-    return redirect('/?ml_error=callback_error')
+    console.error('[ML CALLBACK] exception:', { exceptionMessage: String(err) })
+    return redirect('/?ml_error=token_exchange_failed')
   }
 }
