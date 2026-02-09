@@ -32,26 +32,7 @@ type ListingPricesResult = {
   classicoFixed: number | null
   premium: number | null
   premiumFixed: number | null
-  debug: {
-    usedPrice: number
-    categoryId: string
-    listingTypeIdClassic: string | null
-    listingTypeIdPremium: string | null
-    classicPercentFromApi: number | null
-    premiumPercentFromApi: number | null
-    classicFieldUsed: 'percentage_fee' | 'sale_fee_amount_calc' | null
-    premiumFieldUsed: 'percentage_fee' | 'sale_fee_amount_calc' | null
-    rawItems: Array<{
-      listing_type_id?: string
-      sale_fee_amount?: number
-      sale_fee_details?: unknown
-      listing_fee_amount?: number
-      listing_fee_details?: unknown
-      firstItemKeys?: string[]
-      percentNullReason?: string
-    }>
-    fallbackReason?: string
-  }
+  debug: Record<string, any>
 }
 
 async function fetchFromListingPrices(
