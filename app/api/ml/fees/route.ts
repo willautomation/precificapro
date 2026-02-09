@@ -70,7 +70,13 @@ async function fetchFromListingPrices(
   let premiumFieldUsed: 'percentage_fee' | 'sale_fee_amount_calc' | null = null
   const rawItems: Array<{ listing_type_id?: string; sale_fee_amount?: number; sale_fee_details?: unknown; listing_fee_amount?: number; listing_fee_details?: unknown; firstItemKeys?: string[]; percentNullReason?: string }> = []
   try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' })
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'PrecificaPro/1.0',
+        'Accept': 'application/json',
+      },
+      cache: 'no-store',
+    })
     if (!res.ok) {
       console.log('[ml/fees] listing_prices NOT OK', res.status)
       return { classico, classicoFixed, premium, premiumFixed, debug: { usedPrice: price, categoryId, listingTypeIdClassic, listingTypeIdPremium, classicPercentFromApi: null, premiumPercentFromApi: null, classicFieldUsed: null, premiumFieldUsed: null, rawItems, fallbackReason: `ML_API_ERROR status=${res.status}` } }
