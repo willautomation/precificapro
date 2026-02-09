@@ -64,7 +64,9 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
       return
     }
     try {
-      const res = await fetch(`/api/ml/fees?category_id=${encodeURIComponent(categoryId)}`)
+      const p = parseFloat(productCost)
+      const price = p > 0 ? p : 1
+      const res = await fetch(`/api/ml/fees?category_id=${encodeURIComponent(categoryId)}&price=${encodeURIComponent(price)}`)
       const data = await res.json()
       if (res.ok) {
         setMlClassicoSaleFee(data.classico ?? null)

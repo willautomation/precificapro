@@ -156,11 +156,17 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const categoryId = searchParams.get('categoryId') ?? searchParams.get('category_id')
   const priceParam = searchParams.get('price')
-  const price = priceParam ? parseFloat(priceParam) : 100
+  const price = priceParam ? parseFloat(priceParam) : NaN
 
   if (!categoryId) {
     return NextResponse.json(
       { error: 'category_id é obrigatório' },
+      { status: 400 }
+    )
+  }
+  if (!Number.isFinite(price) || price <= 0) {
+    return NextResponse.json(
+      { error: 'price é obrigatório e deve ser um número maior que zero' },
       { status: 400 }
     )
   }
