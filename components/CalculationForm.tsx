@@ -43,23 +43,49 @@ export function CalculationForm({ onSubmit }: CalculationFormProps) {
     }
   }, [platform])
 
-  const handleCategoryResolved = (
+  const handleCategoryResolved = async (
     categoryId: string | null,
     categoryName: string | null,
-    classicoSaleFee: number | null,
-    classicoFixedFee: number | null,
-    premiumSaleFee: number | null,
-    premiumFixedFee: number | null,
+    _classicoSaleFee: number | null,
+    _classicoFixedFee: number | null,
+    _premiumSaleFee: number | null,
+    _premiumFixedFee: number | null,
     breadcrumb?: string | null
   ) => {
     if (typeof window !== 'undefined') {
       console.log('ML CATEGORY RESOLVED', { id: categoryId, breadcrumb: breadcrumb ?? categoryName })
     }
     setMlCategoryId(categoryId)
-    setMlClassicoSaleFee(classicoSaleFee)
-    setMlClassicoFixedFee(classicoFixedFee)
-    setMlPremiumSaleFee(premiumSaleFee)
-    setMlPremiumFixedFee(premiumFixedFee)
+    if (!categoryId) {
+      setMlClassicoSaleFee(null)
+      setMlClassicoFixedFee(null)
+      setMlPremiumSaleFee(null)
+      setMlPremiumFixedFee(null)
+      return
+    }
+    try {
+      const res = await fetch(`/api/ml/fees?category_id=${encodeURIComponent(categoryId)}`)
+      const data = await res.json()
+      if (res.ok) {
+        setMlClassicoSaleFee(data.classico ?? null)
+        setMlClassicoFixedFee(data.classico_fixed ?? null)
+        setMlPremiumSaleFee(data.premium ?? null)
+        setMlPremiumFixedFee(data.premium_fixed ?? null)
+        if (typeof window !== 'undefined') {
+          console.log('ML FEES LOADED', { classico: data.classico, premium: data.premium, classico_fixed: data.classico_fixed, premium_fixed: data.premium_fixed })
+        }
+      } else {
+        setMlClassicoSaleFee(null)
+        setMlClassicoFixedFee(null)
+        setMlPremiumSaleFee(null)
+        setMlPremiumFixedFee(null)
+      }
+    } catch {
+      setMlClassicoSaleFee(null)
+      setMlClassicoFixedFee(null)
+      setMlPremiumSaleFee(null)
+      setMlPremiumFixedFee(null)
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
