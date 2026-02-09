@@ -13,18 +13,18 @@ type ListingPriceItem = {
   listing_fee_details?: { fixed_fee?: number; gross_amount?: number }
 }
 
-function getPercentFromSaleFeeDetails(saleFeeDetails: unknown, saleFeeAmount: number | undefined, price: number): { percent: number | null; used: 'percentage_fee' | 'sale_fee_amount_calc'; percentNullReason?: string } {
+function getPercentFromItem(saleFeeDetails: unknown, saleFeeAmount: number | undefined, price: number): { percent: number | null; used: 'percentage_fee' | 'sale_fee_amount_calc'; percentNullReason?: string } {
+  const calcPercent = saleFeeAmount != null && price > 0 ? Math.round((saleFeeAmount / price) * 10000) / 100 : null
   const details = Array.isArray(saleFeeDetails) ? saleFeeDetails : []
   const feeDetail = details.find((d: { percentage_fee?: unknown }) => typeof (d as { percentage_fee?: number })?.percentage_fee === 'number')
   const pct = feeDetail ? (feeDetail as { percentage_fee: number }).percentage_fee : undefined
   if (typeof pct === 'number') {
     return { percent: pct, used: 'percentage_fee' }
   }
-  const calc = saleFeeAmount != null && price > 0 ? Math.round((saleFeeAmount / price) * 10000) / 100 : null
-  const percentNullReason = calc == null
-    ? (details.length === 0 ? 'DETAILS_EMPTY_AND_NO_SALE_FEE_AMOUNT' : 'NO_PERCENT_IN_DETAILS_AND_NO_SALE_FEE_AMOUNT')
-    : (details.length === 0 ? 'DETAILS_EMPTY' : 'NO_PERCENT_IN_DETAILS')
-  return { percent: calc, used: 'sale_fee_amount_calc', percentNullReason }
+  if (calcPercent != null) {
+    return { percent: calcPercent, used: 'sale_fee_amount_calc' }
+  }
+  return { percent: null, used: 'sale_fee_amount_calc', percentNullReason: 'NO_SALE_FEE_AMOUNT_OR_PRICE' }
 }
 
 type ListingPricesResult = {
@@ -80,7 +80,7 @@ async function fetchFromListingPrices(
     console.log('[ml/fees] listing_prices RESPONSE', arr.map((i) => ({ listing_type_id: i.listing_type_id, sale_fee_amount: i.sale_fee_amount, sale_fee_details: i.sale_fee_details, listing_fee_amount: i.listing_fee_amount, listing_fee_details: i.listing_fee_details })))
     for (const item of arr) {
       const firstItemKeys = item && typeof item === 'object' ? Object.keys(item) : []
-      const { percent, used, percentNullReason } = getPercentFromSaleFeeDetails(item.sale_fee_details, item.sale_fee_amount, price)
+      const { percent, used, percentNullReason } = getPercentFromItem(item.sale_fee_details, item.sale_fee_amount, price)
       rawItems.push({
         listing_type_id: item.listing_type_id,
         sale_fee_amount: item.sale_fee_amount,
