@@ -1,63 +1,79 @@
-export const dynamic = 'force-dynamic'
+import { NextRequest, NextResponse } from "next/server";
 
-import { NextResponse } from 'next/server'
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const code = searchParams.get("code");
+  const state = searchParams.get("state");
 
-const ML_TOKEN_URL = 'https://api.mercadolibre.com/oauth/token'
-const REDIRECT_URI = "https://precificapro-pi.vercel.app/api/ml/callback"
+  const ml_oauth_state = req.cookies.get("ml_oauth_state")?.value;
+  const ml_code_verifier = req.cookies.get("ml_code_verifier")?.value;
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const code = searchParams.get('code')
-
-  if (!code) {
-    return NextResponse.redirect(new URL('/', req.url))
+  if (!code || !state || !ml_oauth_state || !ml_code_verifier || state !== ml_oauth_state) {
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
-  const clientId = process.env.ML_CLIENT_ID
-  const clientSecret = process.env.ML_CLIENT_SECRET
-  if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL('/', req.url))
+  const client_id = process.env.ML_CLIENT_ID;
+  const client_secret = process.env.ML_CLIENT_SECRET;
+  const redirect_uri = process.env.ML_REDIRECT_URI;
+
+  if (!client_id || !client_secret || !redirect_uri) {
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
   const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    client_id: clientId,
-    client_secret: clientSecret,
+    grant_type: "authorization_code",
+    client_id,
+    client_secret,
     code,
-    redirect_uri: REDIRECT_URI,
-  })
+    redirect_uri,
+    code_verifier: ml_code_verifier,
+  });
 
-  const res = await fetch(ML_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  const tokenRes = await fetch("https://api.mercadolibre.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
-  })
+  });
 
-  const data = (await res.json()) as { access_token?: string; refresh_token?: string; expires_in?: number }
+  const data = (await tokenRes.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    user_id?: number;
+  };
 
   if (!data.access_token) {
-    return NextResponse.redirect(new URL('/', req.url))
+    return NextResponse.redirect(new URL("/", req.url));
   }
 
-  const response = NextResponse.redirect(new URL('/', req.url))
+  const res = NextResponse.redirect(new URL("/", req.url));
 
-  response.cookies.set('ml_access_token', data.access_token, {
+  res.cookies.set("ml_access_token", data.access_token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: data.expires_in ?? 21600,
-  })
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 6,
+  });
 
   if (data.refresh_token) {
-    response.cookies.set('ml_refresh_token', data.refresh_token, {
+    res.cookies.set("ml_refresh_token", data.refresh_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
+      secure: true,
+      sameSite: "lax",
+      path: "/",
       maxAge: 60 * 60 * 24 * 180,
-    })
+    });
   }
 
-  return response
+  if (data.user_id != null) {
+    res.cookies.set("ml_user_id", String(data.user_id), {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 180,
+    });
+  }
+
+  return res;
 }
