@@ -4,53 +4,69 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
+    const returnedState = url.searchParams.get("state");
 
-    if (!code) {
-      return NextResponse.json({ error: "No code provided" }, { status: 400 });
-    }
-
-    const clientId = process.env.ML_CLIENT_ID;
+    const clientId = process.env.ML_CLIENT_ID || process.env.ID_do_CLIENTE_ML;
     const clientSecret = process.env.ML_CLIENT_SECRET;
     const redirectUri = process.env.ML_REDIRECT_URI;
 
     if (!clientId || !clientSecret || !redirectUri) {
       return NextResponse.json(
-        { error: "Missing ML_CLIENT_ID / ML_CLIENT_SECRET / ML_REDIRECT_URI" },
+        {
+          error: "missing_env",
+          message:
+            "Faltam variáveis ML_CLIENT_ID (ou ID_do_CLIENTE_ML), ML_CLIENT_SECRET e/ou ML_REDIRECT_URI no ambiente.",
+        },
         { status: 500 }
       );
     }
 
-    // Lê cookies (PKCE + state)
-    const cookieHeader = req.headers.get("cookie") || "";
-    const cookies = Object.fromEntries(
-      cookieHeader
-        .split(";")
-        .map((c) => c.trim())
-        .filter(Boolean)
-        .map((c) => {
-          const idx = c.indexOf("=");
-          if (idx === -1) return [c, ""];
-          return [decodeURIComponent(c.slice(0, idx)), decodeURIComponent(c.slice(idx + 1))];
-        })
-    );
-
-    const savedState = cookies["ml_oauth_state"];
-    const codeVerifier = cookies["ml_pkce_verifier"];
-
-    if (!savedState || !codeVerifier) {
+    if (!code) {
       return NextResponse.json(
-        { error: "Missing PKCE cookies (ml_oauth_state / ml_pkce_verifier). Start login again." },
+        { error: "missing_code", message: "Não veio ?code= no callback." },
         { status: 400 }
       );
     }
 
-    if (state && savedState !== state) {
-      return NextResponse.json({ error: "Invalid state" }, { status: 400 });
+    const cookieState = req.headers
+      .get("cookie")
+      ?.split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith("ml_oauth_state="))
+      ?.split("=")?.[1];
+
+    const codeVerifier = req.headers
+      .get("cookie")
+      ?.split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith("ml_code_verifier="))
+      ?.split("=")?.[1];
+
+    if (!returnedState || !cookieState || returnedState !== cookieState) {
+      return NextResponse.json(
+        {
+          error: "invalid_state",
+          message: "Estado inválido (state não bate com cookie).",
+          returnedState,
+          cookieState,
+        },
+        { status: 400 }
+      );
     }
 
-    // Trocar code por token (PKCE exige code_verifier)
-    const tokenResponse = await fetch("https://api.mercadolibre.com/oauth/token", {
+    if (!codeVerifier) {
+      return NextResponse.json(
+        {
+          error: "missing_code_verifier",
+          message:
+            "code_verifier é obrigatório (PKCE). Cookie ml_code_verifier não encontrado.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Troca code -> token (com PKCE code_verifier)
+    const tokenRes = await fetch("https://api.mercadolibre.com/oauth/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -63,26 +79,72 @@ export async function GET(req: Request) {
       }),
     });
 
-    const tokenData = await tokenResponse.json();
+    const tokenJson = await tokenRes.json();
 
-    if (!tokenResponse.ok) {
-      console.error("TOKEN ERROR:", tokenData);
-      return NextResponse.json(tokenData, { status: 500 });
+    if (!tokenRes.ok) {
+      return NextResponse.json(
+        {
+          error: "token_exchange_failed",
+          status: tokenRes.status,
+          tokenJson,
+        },
+        { status: 500 }
+      );
     }
 
-    // Se chegou aqui: token OK.
-    const res = NextResponse.redirect(new URL("/", req.url));
+    const accessToken = tokenJson?.access_token;
+    const refreshToken = tokenJson?.refresh_token;
 
-    // limpa cookies de PKCE/state
-    res.cookies.set("ml_pkce_verifier", "", { path: "/", maxAge: 0 });
-    res.cookies.set("ml_oauth_state", "", { path: "/", maxAge: 0 });
+    // Se quiser, dá pra puxar /users/me aqui depois.
+    // Por enquanto, só salvamos tokens.
 
-    // (opcional) você pode salvar access_token em cookie se quiser usar depois no /api/ml/me
-    // res.cookies.set("ml_access_token", tokenData.access_token, { httpOnly:true, secure:true, sameSite:"lax", path:"/", maxAge: 60*60 });
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL || "https://precificapro-pi.vercel.app";
+
+    const res = NextResponse.redirect(`${appUrl}/?ml=ok`);
+
+    // Salva tokens em cookies httpOnly
+    // OBS: maxAge do access token pode ser o expires_in (segundos). Mantive 6h pra segurança.
+    res.cookies.set("ml_access_token", accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 6 * 60 * 60,
+    });
+
+    if (refreshToken) {
+      res.cookies.set("ml_refresh_token", refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 30 * 24 * 60 * 60, // 30 dias
+      });
+    }
+
+    // Limpa cookies temporários do OAuth
+    res.cookies.set("ml_oauth_state", "", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+
+    res.cookies.set("ml_code_verifier", "", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
 
     return res;
-  } catch (err) {
-    console.error("CALLBACK CRASH:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: "callback_crash", message: String(err?.message || err) },
+      { status: 500 }
+    );
   }
 }
