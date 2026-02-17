@@ -80,13 +80,18 @@ export function calcularShopeeOficial(input: ShopeeInput): {
 
   const extraPorItem = sellerType === 'CPF' && cpfHighVolume ? (cfg.cpfHighVolumeExtra ?? 7) : 0
   const extraCPF450Total = extraPorItem * quantidade
-  const totalPorItemSemTaxaFixa = comissao + taxaTransacao + taxaTransporte + extraPorItem
-  const totalTaxas = totalPorItemSemTaxaFixa * quantidade + taxaFixaPorPedido
+
+  // Total de taxas da Shopee:
+  // - Percentuais (comissão, transação, frete grátis) sempre 1x sobre o preço total
+  // - Extra CPF 450+ por item (multiplicado pela quantidade)
+  // - Taxa fixa 1x por pedido
+  const totalTaxas =
+    comissao + taxaTransacao + taxaTransporte + extraCPF450Total + taxaFixaPorPedido
 
   return {
-    comissao: comissao * quantidade,
-    taxaTransacao: taxaTransacao * quantidade,
-    taxaTransporte: taxaTransporte * quantidade,
+    comissao,
+    taxaTransacao,
+    taxaTransporte,
     taxaFixa: taxaFixaPorPedido,
     extraCPF450: extraCPF450Total,
     totalTaxas,
@@ -125,16 +130,20 @@ function calcularTaxasShopeePorPreco(
   }
 
   const extraPorItem = sellerType === 'CPF' && cpfHighVolume ? (cfg.cpfHighVolumeExtra ?? 7) : 0
-  const totalPorItemSemTaxaFixa = comissao + taxaTransacao + taxaTransporte + extraPorItem
-  const totalTaxas = totalPorItemSemTaxaFixa * quantidade + taxaFixaPorPedido
+  const extraCPF450Total = extraPorItem * quantidade
+
+  // Total de taxas usado no iterador de preço sugerido (mesma regra do oficial)
+  const totalTaxas =
+    comissao + taxaTransacao + taxaTransporte + extraCPF450Total + taxaFixaPorPedido
 
   return {
     comissao,
     taxaTransacao,
     taxaTransporte,
     taxaFixa: taxaFixaPorPedido,
-    extraCPF450: extraPorItem * quantidade,
-    totalPorItem: totalPorItemSemTaxaFixa,
+    extraCPF450: extraCPF450Total,
+    // Mantém totalPorItem como soma das taxas percentuais + extra por item (sem taxa fixa)
+    totalPorItem: comissao + taxaTransacao + taxaTransporte + extraPorItem,
     totalTaxas,
   }
 }
@@ -174,8 +183,9 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   if (input.platform === 'Shopee') {
     // Para Shopee, o custo do produto deve considerar o KIT (quantidade)
     const totalProductCost = input.productCost * input.quantity
-    // Mantém frete por unidade e outros custos conforme comportamento atual
-    totalCost = totalProductCost + input.otherCosts + shippingPerUnit
+    // Total de custos da Shopee segue a regra:
+    // totalCost = totalProductCost + otherCosts + freightInput (Frete Total R$)
+    totalCost = totalProductCost + input.otherCosts + input.shippingTotal
 
     const participaFreteGratis = !!input.shopeeFreeShippingProgram
     const cpfHighVolume = input.sellerType === 'CPF' ? !!input.shopeeCpfHighVolume : false
