@@ -24,6 +24,15 @@ export function CalculationResults({ result }: CalculationResultsProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Heurística simples: resultados com debug são de Mercado Livre; sem debug, Shopee
+  const isMercadoLivre = !!result.debug
+
+  // Para Shopee, queremos exibir o frete total digitado no formulário ("Frete Total (R$)")
+  // usando apenas dados já presentes no resultado (sem alterar lógica de cálculo).
+  const shopeeFreightTotal = !isMercadoLivre
+    ? result.totalCost - result.breakdown.productCost - result.breakdown.otherCosts
+    : null
+
   return (
     <div className="space-y-4">
       <div className="card bg-gradient-to-br from-primary-50 to-primary-100 border-primary-300">
@@ -79,10 +88,21 @@ export function CalculationResults({ result }: CalculationResultsProps) {
               <span className="text-gray-600">Custo do Produto:</span>
               <span className="font-semibold">{formatCurrency(result.breakdown.productCost)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Frete por Unidade:</span>
-              <span className="font-semibold">{formatCurrency(result.breakdown.shippingPerUnit)}</span>
-            </div>
+            {isMercadoLivre ? (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Frete por Unidade:</span>
+                <span className="font-semibold">
+                  {formatCurrency(result.breakdown.shippingPerUnit)}
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Frete Total:</span>
+                <span className="font-semibold">
+                  {formatCurrency(shopeeFreightTotal ?? 0)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-600">Outros Custos:</span>
               <span className="font-semibold">{formatCurrency(result.breakdown.otherCosts)}</span>
