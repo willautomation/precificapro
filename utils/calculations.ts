@@ -165,12 +165,18 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
   const cfgML = config.mercadoLivre
 
   const shippingPerUnit = input.shippingTotal / input.quantity
-  const totalCost = input.productCost + input.otherCosts + shippingPerUnit
+  const baseCostPerUnit = input.productCost + input.otherCosts + shippingPerUnit
 
   let suggestedPrice = 0
   let totalFees = 0
+  let totalCost = 0
 
   if (input.platform === 'Shopee') {
+    // Para Shopee, o custo do produto deve considerar o KIT (quantidade)
+    const totalProductCost = input.productCost * input.quantity
+    // Mantém frete por unidade e outros custos conforme comportamento atual
+    totalCost = totalProductCost + input.otherCosts + shippingPerUnit
+
     const participaFreteGratis = !!input.shopeeFreeShippingProgram
     const cpfHighVolume = input.sellerType === 'CPF' ? !!input.shopeeCpfHighVolume : false
 
@@ -214,6 +220,9 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
     })
     totalFees = shopee.totalTaxas
   } else {
+    // Para Mercado Livre, mantemos o custo por unidade como antes
+    totalCost = baseCostPerUnit
+
     const hasCategory = !!input.mlCategoryId
     const percentClassico = hasCategory
       ? (input.mlClassicoSaleFeePercent ?? cfgML.defaultCategoryPercentClassico)
@@ -269,7 +278,8 @@ export function calculatePrice(input: CalculationInput): CalculationResult | nul
       cpfHighVolume: input.sellerType === 'CPF' ? !!input.shopeeCpfHighVolume : false,
     })
     breakdown = {
-      productCost: input.productCost,
+      // No detalhamento, exibir o custo total do pedido (produto * quantidade)
+      productCost: input.productCost * input.quantity,
       shippingPerUnit,
       otherCosts: input.otherCosts,
       commission: shopee.comissao,
