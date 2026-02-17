@@ -72,22 +72,22 @@ export function calcularShopeeOficial(input: ShopeeInput): {
     fixedFeeBase = cfg.fixedFeeCPF
   }
 
-  let taxaFixaPorItem = fixedFeeBase
+  // Taxa fixa da Shopee é por pedido (não por item)
+  let taxaFixaPorPedido = fixedFeeBase
   if (precoVenda < 10) {
-    taxaFixaPorItem = Math.min(fixedFeeBase, precoVenda / 2)
+    taxaFixaPorPedido = Math.min(fixedFeeBase, precoVenda / 2)
   }
 
   const extraPorItem = sellerType === 'CPF' && cpfHighVolume ? (cfg.cpfHighVolumeExtra ?? 7) : 0
   const extraCPF450Total = extraPorItem * quantidade
-
-  const totalPorItem = comissao + taxaTransacao + taxaTransporte + taxaFixaPorItem + extraPorItem
-  const totalTaxas = totalPorItem * quantidade
+  const totalPorItemSemTaxaFixa = comissao + taxaTransacao + taxaTransporte + extraPorItem
+  const totalTaxas = totalPorItemSemTaxaFixa * quantidade + taxaFixaPorPedido
 
   return {
     comissao: comissao * quantidade,
     taxaTransacao: taxaTransacao * quantidade,
     taxaTransporte: taxaTransporte * quantidade,
-    taxaFixa: taxaFixaPorItem * quantidade,
+    taxaFixa: taxaFixaPorPedido,
     extraCPF450: extraCPF450Total,
     totalTaxas,
   }
@@ -118,22 +118,24 @@ function calcularTaxasShopeePorPreco(
     fixedFeeBase = cfg.fixedFeeCPF
   }
 
-  let taxaFixaPorItem = fixedFeeBase
+  // Taxa fixa da Shopee é por pedido (não por item)
+  let taxaFixaPorPedido = fixedFeeBase
   if (precoVenda < 10) {
-    taxaFixaPorItem = Math.min(fixedFeeBase, precoVenda / 2)
+    taxaFixaPorPedido = Math.min(fixedFeeBase, precoVenda / 2)
   }
 
   const extraPorItem = sellerType === 'CPF' && cpfHighVolume ? (cfg.cpfHighVolumeExtra ?? 7) : 0
-  const totalPorItem = comissao + taxaTransacao + taxaTransporte + taxaFixaPorItem + extraPorItem
+  const totalPorItemSemTaxaFixa = comissao + taxaTransacao + taxaTransporte + extraPorItem
+  const totalTaxas = totalPorItemSemTaxaFixa * quantidade + taxaFixaPorPedido
 
   return {
     comissao,
     taxaTransacao,
     taxaTransporte,
-    taxaFixa: taxaFixaPorItem,
+    taxaFixa: taxaFixaPorPedido,
     extraCPF450: extraPorItem * quantidade,
-    totalPorItem,
-    totalTaxas: totalPorItem * quantidade,
+    totalPorItem: totalPorItemSemTaxaFixa,
+    totalTaxas,
   }
 }
 
